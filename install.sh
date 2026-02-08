@@ -116,12 +116,12 @@ setup_paths() {
     if [ "$MACHINE" = "Mac" ] || [ "$MACHINE" = "Linux" ]; then
         CLAUDE_CONFIG_DIR="$HOME/.claude"
         MCP_APPS_DIR="$HOME/.claude/apps/mcp"
-        MCP_CONFIG_FILE="$CLAUDE_CONFIG_DIR/mcp.json"
+        MCP_CONFIG_FILE="$HOME/.claude.json"
         TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     elif [ "$MACHINE" = "Windows" ]; then
         CLAUDE_CONFIG_DIR="$APPDATA/claude"
         MCP_APPS_DIR="$APPDATA/claude/apps/mcp"
-        MCP_CONFIG_FILE="$CLAUDE_CONFIG_DIR/mcp.json"
+        MCP_CONFIG_FILE="$APPDATA/.claude.json"
         TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     else
         echo -e "${RED}Blimey! I don't recognize this operating system: $MACHINE${NC}"
@@ -239,7 +239,7 @@ get_credentials() {
         else
             echo ""
             echo -e "${YELLOW}⚠️  No worries, matey! Ye can add yer keys later.${NC}"
-            echo -e "   Just edit this file: ${CYAN}$MCP_CONFIG_FILE${NC}"
+            echo -e "   Just edit the mcpServers section in: ${CYAN}$MCP_CONFIG_FILE${NC}"
             DATADOG_API_KEY="YOUR_API_KEY_HERE"
             DATADOG_APP_KEY="YOUR_APP_KEY_HERE"
         fi
@@ -251,7 +251,7 @@ get_credentials() {
         echo -e "   ${CYAN}curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/install.sh -o install.sh${NC}"
         echo -e "   ${CYAN}chmod +x install.sh && ./install.sh${NC}"
         echo ""
-        echo -e "   Or edit the config file after installation:"
+        echo -e "   Or edit the mcpServers section after installation:"
         echo -e "   ${CYAN}$MCP_CONFIG_FILE${NC}"
         DATADOG_API_KEY="YOUR_API_KEY_HERE"
         DATADOG_APP_KEY="YOUR_APP_KEY_HERE"
@@ -271,16 +271,17 @@ configure_claude() {
     mkdir -p "$CLAUDE_CONFIG_DIR"
 
     if [ -f "$MCP_CONFIG_FILE" ]; then
-        echo -e "${YELLOW}Found existing mcp.json...${NC}"
+        echo -e "${YELLOW}Found existing .claude.json...${NC}"
 
         if command -v jq &> /dev/null; then
-            # Use jq to merge - preserves other MCP servers
+            # Use jq to merge - preserves all existing settings and other MCP servers
             TEMP_FILE=$(mktemp)
+            # First ensure mcpServers key exists, then add/update datadog-traces
             jq --arg jar "$JAR_PATH" \
                --arg api_key "$DATADOG_API_KEY" \
                --arg app_key "$DATADOG_APP_KEY" \
                --arg site "$DATADOG_SITE" \
-               '.mcpServers["datadog-traces"] = {
+               '.mcpServers = (.mcpServers // {}) | .mcpServers["datadog-traces"] = {
                    "command": "java",
                    "args": ["-jar", $jar],
                    "env": {
@@ -289,12 +290,12 @@ configure_claude() {
                        "DATADOG_SITE": $site
                    }
                }' "$MCP_CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$MCP_CONFIG_FILE"
-            echo -e "${GREEN}✓ Updated datadog-traces in mcp.json (other servers preserved)${NC}"
+            echo -e "${GREEN}✓ Updated datadog-traces in .claude.json (all other settings preserved)${NC}"
         else
-            # No jq - need to be careful not to overwrite other servers
+            # No jq - need to be careful not to overwrite other settings
             echo -e "${YELLOW}⚠️  jq not found. Cannot safely merge config.${NC}"
             echo ""
-            echo -e "   Please add this manually to ${CYAN}$MCP_CONFIG_FILE${NC}:"
+            echo -e "   Please add this to the ${CYAN}mcpServers${NC} section in ${CYAN}$MCP_CONFIG_FILE${NC}:"
             echo ""
             echo -e "${BLUE}   \"datadog-traces\": {"
             echo -e "     \"command\": \"java\","
@@ -309,7 +310,7 @@ configure_claude() {
             echo -e "   Or install jq: ${CYAN}brew install jq${NC} (Mac) / ${CYAN}apt install jq${NC} (Linux)"
         fi
     else
-        # No existing config - safe to create new
+        # No existing config - create new .claude.json with mcpServers
         write_new_config
     fi
     echo ""
@@ -331,7 +332,7 @@ write_new_config() {
   }
 }
 EOF
-    echo -e "${GREEN}✓ Created mcp.json configuration${NC}"
+    echo -e "${GREEN}✓ Created .claude.json configuration${NC}"
 }
 
 # Cleanup
