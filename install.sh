@@ -271,10 +271,10 @@ configure_claude() {
     mkdir -p "$CLAUDE_CONFIG_DIR"
 
     if [ -f "$MCP_CONFIG_FILE" ]; then
-        echo -e "${YELLOW}Found existing mcp.json, backing it up...${NC}"
-        cp "$MCP_CONFIG_FILE" "$MCP_CONFIG_FILE.backup.$(date +%Y%m%d%H%M%S)"
+        echo -e "${YELLOW}Found existing mcp.json...${NC}"
 
         if command -v jq &> /dev/null; then
+            # Use jq to merge - preserves other MCP servers
             TEMP_FILE=$(mktemp)
             jq --arg jar "$JAR_PATH" \
                --arg api_key "$DATADOG_API_KEY" \
@@ -289,12 +289,27 @@ configure_claude() {
                        "DATADOG_SITE": $site
                    }
                }' "$MCP_CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$MCP_CONFIG_FILE"
-            echo -e "${GREEN}✓ Updated existing mcp.json${NC}"
+            echo -e "${GREEN}✓ Updated datadog-traces in mcp.json (other servers preserved)${NC}"
         else
-            echo -e "${YELLOW}⚠️  jq not found, creating new config (old one backed up)${NC}"
-            write_new_config
+            # No jq - need to be careful not to overwrite other servers
+            echo -e "${YELLOW}⚠️  jq not found. Cannot safely merge config.${NC}"
+            echo ""
+            echo -e "   Please add this manually to ${CYAN}$MCP_CONFIG_FILE${NC}:"
+            echo ""
+            echo -e "${BLUE}   \"datadog-traces\": {"
+            echo -e "     \"command\": \"java\","
+            echo -e "     \"args\": [\"-jar\", \"$JAR_PATH\"],"
+            echo -e "     \"env\": {"
+            echo -e "       \"DATADOG_API_KEY\": \"$DATADOG_API_KEY\","
+            echo -e "       \"DATADOG_APP_KEY\": \"$DATADOG_APP_KEY\","
+            echo -e "       \"DATADOG_SITE\": \"$DATADOG_SITE\""
+            echo -e "     }"
+            echo -e "   }${NC}"
+            echo ""
+            echo -e "   Or install jq: ${CYAN}brew install jq${NC} (Mac) / ${CYAN}apt install jq${NC} (Linux)"
         fi
     else
+        # No existing config - safe to create new
         write_new_config
     fi
     echo ""
@@ -316,7 +331,7 @@ write_new_config() {
   }
 }
 EOF
-    echo -e "${GREEN}✓ Created new mcp.json configuration${NC}"
+    echo -e "${GREEN}✓ Created mcp.json configuration${NC}"
 }
 
 # Cleanup
