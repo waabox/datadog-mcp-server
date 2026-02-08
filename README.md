@@ -115,7 +115,7 @@ Add this to your `~/.claude.json`:
   "mcpServers": {
     "waabox-datadog-mcp": {
       "command": "java",
-      "args": ["-jar", "/Users/YOUR_USER/.claude/apps/mcp/datadog-mcp-server-1.1.0.jar"],
+      "args": ["-jar", "/Users/YOUR_USER/.claude/apps/mcp/datadog-mcp-server.jar"],
       "env": {
         "DATADOG_API_KEY": "your-api-key-here",
         "DATADOG_APP_KEY": "your-app-key-here",
