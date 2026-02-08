@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn clean compile -q
+
+      - name: Run tests
+        run: mvn test
+
+      - name: Package JAR
+        run: mvn package -DskipTests -q
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: datadog-mcp-server
+          path: target/datadog-mcp-server-*.jar
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build release JAR
+        run: mvn clean package -DskipTests -q
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            target/datadog-mcp-server-*.jar
+          body: |
+            ## Datadog MCP Server ${{ steps.get_version.outputs.VERSION }}
+
+            ### Quick Install
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/install.sh | bash
+            ```
+
+            ### What's included
+            - `datadog-mcp-server-1.0.0-SNAPSHOT.jar` - The MCP server JAR
+
+            ### Requirements
+            - Java 21+
+            - Datadog API Key and Application Key with `apm_read` and `logs_read_data` scopes
+
+            See [README](https://github.com/waabox/datadog-mcp-server#readme) for full documentation.
