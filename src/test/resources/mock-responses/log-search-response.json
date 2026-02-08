@@ -1,0 +1,61 @@
+{
+  "data": [
+    {
+      "id": "log-1",
+      "type": "log",
+      "attributes": {
+        "timestamp": "2024-01-15T10:30:00.010Z",
+        "status": "error",
+        "service": "user-service",
+        "message": "Failed to create user: email validation error for user@example.com",
+        "host": "user-svc-pod-abc123",
+        "attributes": {
+          "trace_id": "trace-001",
+          "user_email": "user@example.com",
+          "error_code": "DUPLICATE_EMAIL"
+        },
+        "tags": ["env:prod", "service:user-service", "version:1.2.3"]
+      }
+    },
+    {
+      "id": "log-2",
+      "type": "log",
+      "attributes": {
+        "timestamp": "2024-01-15T10:30:00.015Z",
+        "status": "warn",
+        "service": "user-service",
+        "message": "Duplicate email check triggered for existing user",
+        "host": "user-svc-pod-abc123",
+        "attributes": {
+          "trace_id": "trace-001",
+          "existing_user_id": "12345"
+        },
+        "tags": ["env:prod", "service:user-service"]
+      }
+    },
+    {
+      "id": "log-3",
+      "type": "log",
+      "attributes": {
+        "timestamp": "2024-01-15T10:30:00.020Z",
+        "status": "error",
+        "service": "api-gateway",
+        "message": "Request failed with status 500: POST /api/users",
+        "host": "gateway-pod-xyz789",
+        "attributes": {
+          "trace_id": "trace-001",
+          "http_status": 500,
+          "request_id": "req-abc-123"
+        },
+        "tags": ["env:prod", "service:api-gateway"]
+      }
+    }
+  ],
+  "meta": {
+    "page": {
+      "after": null
+    },
+    "elapsed": 23,
+    "status": "done"
+  }
+}

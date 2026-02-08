@@ -1,0 +1,82 @@
+{
+  "data": {
+    "type": "trace",
+    "attributes": {
+      "trace_id": "trace-001",
+      "service": "user-service",
+      "env": "prod",
+      "start": 1705315800000000000,
+      "end": 1705315800150000000,
+      "duration": 150000000,
+      "resource_name": "POST /api/users",
+      "spans": [
+        {
+          "span_id": "span-root",
+          "parent_id": "0",
+          "trace_id": "trace-001",
+          "service": "api-gateway",
+          "name": "http.request",
+          "resource": "POST /api/users",
+          "start": 1705315800000000000,
+          "duration": 150000000,
+          "error": 0,
+          "meta": {
+            "http.method": "POST",
+            "http.url": "/api/users",
+            "http.status_code": "500"
+          },
+          "metrics": {}
+        },
+        {
+          "span_id": "span-user-svc",
+          "parent_id": "span-root",
+          "trace_id": "trace-001",
+          "service": "user-service",
+          "name": "user.create",
+          "resource": "UserService.createUser",
+          "start": 1705315800010000000,
+          "duration": 130000000,
+          "error": 1,
+          "meta": {
+            "error.message": "User validation failed: email already exists",
+            "error.type": "ValidationException",
+            "error.stack": "ValidationException: User validation failed: email already exists\n\tat com.example.UserService.createUser(UserService.java:45)\n\tat com.example.UserController.create(UserController.java:32)\n\tat sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)"
+          },
+          "metrics": {}
+        },
+        {
+          "span_id": "span-db",
+          "parent_id": "span-user-svc",
+          "trace_id": "trace-001",
+          "service": "postgres",
+          "name": "postgresql.query",
+          "resource": "SELECT * FROM users WHERE email = ?",
+          "start": 1705315800020000000,
+          "duration": 15000000,
+          "error": 0,
+          "meta": {
+            "db.type": "postgresql",
+            "db.instance": "users_db"
+          },
+          "metrics": {}
+        },
+        {
+          "span_id": "span-validation",
+          "parent_id": "span-user-svc",
+          "trace_id": "trace-001",
+          "service": "user-service",
+          "name": "validation.check",
+          "resource": "EmailValidator.validate",
+          "start": 1705315800040000000,
+          "duration": 5000000,
+          "error": 1,
+          "meta": {
+            "error.message": "Email already registered",
+            "error.type": "DuplicateEmailException"
+          },
+          "metrics": {}
+        }
+      ]
+    }
+  }
+}

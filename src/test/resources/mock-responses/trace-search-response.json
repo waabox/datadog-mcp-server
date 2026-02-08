@@ -1,0 +1,61 @@
+{
+  "data": [
+    {
+      "id": "span-1",
+      "type": "span",
+      "attributes": {
+        "timestamp": "2024-01-15T10:30:00Z",
+        "service": "user-service",
+        "resource_name": "POST /api/users",
+        "span_id": "abc123",
+        "trace_id": "trace-001",
+        "duration": 150000000,
+        "status": "error",
+        "attributes": {
+          "error.message": "User validation failed",
+          "error.type": "ValidationException"
+        }
+      }
+    },
+    {
+      "id": "span-2",
+      "type": "span",
+      "attributes": {
+        "timestamp": "2024-01-15T10:31:00Z",
+        "service": "user-service",
+        "resource_name": "POST /api/users",
+        "span_id": "def456",
+        "trace_id": "trace-002",
+        "duration": 230000000,
+        "status": "error",
+        "attributes": {
+          "error.message": "Database connection timeout",
+          "error.type": "TimeoutException"
+        }
+      }
+    },
+    {
+      "id": "span-3",
+      "type": "span",
+      "attributes": {
+        "timestamp": "2024-01-15T10:32:00Z",
+        "service": "user-service",
+        "resource_name": "GET /api/users/123",
+        "span_id": "ghi789",
+        "trace_id": "trace-003",
+        "duration": 45000000,
+        "status": "error",
+        "attributes": {
+          "error.message": "User not found",
+          "error.type": "NotFoundException"
+        }
+      }
+    }
+  ],
+  "meta": {
+    "page": {
+      "after": null
+    },
+    "elapsed": 45
+  }
+}
