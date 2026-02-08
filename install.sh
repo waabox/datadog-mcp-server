@@ -200,37 +200,53 @@ get_credentials() {
     echo -e "   • ${CYAN}logs_read_data${NC} - Read logs data"
     echo ""
 
-    read -p "$(echo -e ${YELLOW}"Do ye want to enter yer API keys now? (y/n): "${NC})" ENTER_KEYS
-
     DATADOG_API_KEY=""
     DATADOG_APP_KEY=""
     DATADOG_SITE="datadoghq.com"
 
-    if [[ "$ENTER_KEYS" =~ ^[Yy]$ ]]; then
-        echo ""
-        read -p "$(echo -e ${CYAN}"Enter yer DATADOG_API_KEY: "${NC})" DATADOG_API_KEY
-        read -p "$(echo -e ${CYAN}"Enter yer DATADOG_APP_KEY: "${NC})" DATADOG_APP_KEY
+    # Check if running interactively (TTY available)
+    if [ -t 0 ]; then
+        # Interactive mode - prompt for input
+        read -p "$(echo -e ${YELLOW}"Do ye want to enter yer API keys now? (y/n): "${NC})" ENTER_KEYS
 
-        echo ""
-        echo -e "Which Datadog site are ye sailin' from?"
-        echo "  1) datadoghq.com (US1 - default)"
-        echo "  2) us3.datadoghq.com (US3)"
-        echo "  3) us5.datadoghq.com (US5)"
-        echo "  4) datadoghq.eu (EU)"
-        echo "  5) ap1.datadoghq.com (AP1)"
-        read -p "$(echo -e ${CYAN}"Choose yer port [1-5] (default: 1): "${NC})" SITE_CHOICE
+        if [[ "$ENTER_KEYS" =~ ^[Yy]$ ]]; then
+            echo ""
+            read -p "$(echo -e ${CYAN}"Enter yer DATADOG_API_KEY: "${NC})" DATADOG_API_KEY
+            read -p "$(echo -e ${CYAN}"Enter yer DATADOG_APP_KEY: "${NC})" DATADOG_APP_KEY
 
-        case "$SITE_CHOICE" in
-            2) DATADOG_SITE="us3.datadoghq.com";;
-            3) DATADOG_SITE="us5.datadoghq.com";;
-            4) DATADOG_SITE="datadoghq.eu";;
-            5) DATADOG_SITE="ap1.datadoghq.com";;
-            *) DATADOG_SITE="datadoghq.com";;
-        esac
+            echo ""
+            echo -e "Which Datadog site are ye sailin' from?"
+            echo "  1) datadoghq.com (US1 - default)"
+            echo "  2) us3.datadoghq.com (US3)"
+            echo "  3) us5.datadoghq.com (US5)"
+            echo "  4) datadoghq.eu (EU)"
+            echo "  5) ap1.datadoghq.com (AP1)"
+            read -p "$(echo -e ${CYAN}"Choose yer port [1-5] (default: 1): "${NC})" SITE_CHOICE
+
+            case "$SITE_CHOICE" in
+                2) DATADOG_SITE="us3.datadoghq.com";;
+                3) DATADOG_SITE="us5.datadoghq.com";;
+                4) DATADOG_SITE="datadoghq.eu";;
+                5) DATADOG_SITE="ap1.datadoghq.com";;
+                *) DATADOG_SITE="datadoghq.com";;
+            esac
+        else
+            echo ""
+            echo -e "${YELLOW}⚠️  No worries, matey! Ye can add yer keys later.${NC}"
+            echo -e "   Just edit this file: ${CYAN}$MCP_CONFIG_FILE${NC}"
+            DATADOG_API_KEY="YOUR_API_KEY_HERE"
+            DATADOG_APP_KEY="YOUR_APP_KEY_HERE"
+        fi
     else
+        # Non-interactive mode (piped from curl)
+        echo -e "${YELLOW}⚠️  Running in non-interactive mode (piped install).${NC}"
         echo ""
-        echo -e "${YELLOW}⚠️  No worries, matey! Ye can add yer keys later.${NC}"
-        echo -e "   Just edit this file: ${CYAN}$MCP_CONFIG_FILE${NC}"
+        echo -e "   To enter yer keys interactively, run the installer like this:"
+        echo -e "   ${CYAN}curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/install.sh -o install.sh${NC}"
+        echo -e "   ${CYAN}chmod +x install.sh && ./install.sh${NC}"
+        echo ""
+        echo -e "   Or edit the config file after installation:"
+        echo -e "   ${CYAN}$MCP_CONFIG_FILE${NC}"
         DATADOG_API_KEY="YOUR_API_KEY_HERE"
         DATADOG_APP_KEY="YOUR_APP_KEY_HERE"
     fi
