@@ -204,15 +204,18 @@ get_credentials() {
     DATADOG_APP_KEY=""
     DATADOG_SITE="datadoghq.com"
 
-    # Check if running interactively (TTY available)
+    # Check if running interactively (TTY available on stdin)
     if [ -t 0 ]; then
         # Interactive mode - prompt for input
-        read -p "$(echo -e ${YELLOW}"Do ye want to enter yer API keys now? (y/n): "${NC})" ENTER_KEYS
+        echo -e -n "${YELLOW}Do ye want to enter yer API keys now? (y/n): ${NC}"
+        read ENTER_KEYS
 
         if [[ "$ENTER_KEYS" =~ ^[Yy]$ ]]; then
             echo ""
-            read -p "$(echo -e ${CYAN}"Enter yer DATADOG_API_KEY: "${NC})" DATADOG_API_KEY
-            read -p "$(echo -e ${CYAN}"Enter yer DATADOG_APP_KEY: "${NC})" DATADOG_APP_KEY
+            echo -e -n "${CYAN}Enter yer DATADOG_API_KEY: ${NC}"
+            read DATADOG_API_KEY
+            echo -e -n "${CYAN}Enter yer DATADOG_APP_KEY: ${NC}"
+            read DATADOG_APP_KEY
 
             echo ""
             echo -e "Which Datadog site are ye sailin' from?"
@@ -221,7 +224,8 @@ get_credentials() {
             echo "  3) us5.datadoghq.com (US5)"
             echo "  4) datadoghq.eu (EU)"
             echo "  5) ap1.datadoghq.com (AP1)"
-            read -p "$(echo -e ${CYAN}"Choose yer port [1-5] (default: 1): "${NC})" SITE_CHOICE
+            echo -e -n "${CYAN}Choose yer port [1-5] (default: 1): ${NC}"
+            read SITE_CHOICE
 
             case "$SITE_CHOICE" in
                 2) DATADOG_SITE="us3.datadoghq.com";;
