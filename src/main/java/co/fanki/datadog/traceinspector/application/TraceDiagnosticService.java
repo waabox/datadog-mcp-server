@@ -86,7 +86,9 @@ public final class TraceDiagnosticService {
         final TraceDetail traceDetail = datadogClient.getTraceDetail(
                 traceId,
                 query.service(),
-                query.env()
+                query.env(),
+                query.from(),
+                query.to()
         );
 
         // Fetch associated logs

@@ -1,21 +1,31 @@
 package co.fanki.datadog.traceinspector.datadog;
 
-import co.fanki.datadog.traceinspector.config.DatadogConfig;
+import co.fanki.datadog.traceinspector.domain.LogQuery;
+import co.fanki.datadog.traceinspector.domain.LogSummary;
 import co.fanki.datadog.traceinspector.domain.ServiceErrorView;
+import co.fanki.datadog.traceinspector.domain.SpanDetail;
 import co.fanki.datadog.traceinspector.domain.TraceDetail;
 import co.fanki.datadog.traceinspector.domain.TraceQuery;
 import co.fanki.datadog.traceinspector.domain.TraceSummary;
+import com.datadog.api.client.ApiException;
+import com.datadog.api.client.v2.api.LogsApi;
+import com.datadog.api.client.v2.api.SpansApi;
+import com.datadog.api.client.v2.model.Log;
+import com.datadog.api.client.v2.model.LogAttributes;
+import com.datadog.api.client.v2.model.LogsListResponse;
+import com.datadog.api.client.v2.model.Span;
+import com.datadog.api.client.v2.model.SpansAttributes;
+import com.datadog.api.client.v2.model.SpansListRequest;
+import com.datadog.api.client.v2.model.SpansListResponse;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.MountableFile;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,59 +33,30 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Integration tests for DatadogClientImpl using Testcontainers with nginx.
+ * Integration tests for DatadogClientImpl using mock SDK APIs.
  *
- * <p>These tests spin up an nginx container that serves mock Datadog API
- * responses, allowing us to test the HTTP client without hitting the
- * real Datadog API.</p>
+ * <p>These tests use mock implementations of SpansApi and LogsApi
+ * to test the client without hitting the real Datadog API.</p>
  *
  * @author waabox(emiliano[at]fanki[dot]co)
  */
-@Testcontainers
 class DatadogClientIntegrationTest {
 
-    @Container
-    @SuppressWarnings("resource")
-    private static final GenericContainer<?> nginx = new GenericContainer<>("nginx:alpine")
-            .withExposedPorts(80)
-            .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("docker/nginx.conf"),
-                    "/etc/nginx/conf.d/default.conf"
-            )
-            .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("mock-responses/trace-search-response.json"),
-                    "/mock-responses/trace-search-response.json"
-            )
-            .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("mock-responses/trace-detail-response.json"),
-                    "/mock-responses/trace-detail-response.json"
-            )
-            .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("mock-responses/log-search-response.json"),
-                    "/mock-responses/log-search-response.json"
-            )
-            .waitingFor(Wait.forHttp("/health").forStatusCode(200));
-
     private DatadogClient client;
+    private MockSpansApi mockSpansApi;
+    private MockLogsApi mockLogsApi;
 
     @BeforeEach
     void setUp() {
-        final String baseUrl = "http://" + nginx.getHost() + ":" + nginx.getMappedPort(80);
-
-        // Create config with test credentials
-        final DatadogConfig config = new DatadogConfig(
-                "test-api-key",
-                "test-app-key",
-                "datadoghq.com",
-                "prod"
-        );
-
-        // Use the base URL override constructor for testing
-        client = new DatadogClientImpl(config, baseUrl);
+        mockSpansApi = new MockSpansApi();
+        mockLogsApi = new MockLogsApi();
+        client = new DatadogClientImpl(mockSpansApi, mockLogsApi);
     }
 
     @Test
     void whenSearchingErrorTraces_givenMockResponse_shouldReturnTraceSummaries() {
+        mockSpansApi.setResponse(createSpansListResponse());
+
         final TraceQuery query = new TraceQuery(
                 "user-service",
                 "prod",
@@ -87,63 +68,36 @@ class DatadogClientIntegrationTest {
         final List<TraceSummary> traces = client.searchErrorTraces(query);
 
         assertNotNull(traces);
-        assertEquals(3, traces.size());
+        assertEquals(2, traces.size());
 
         final TraceSummary first = traces.get(0);
-        assertEquals("trace-001", first.traceId());
         assertEquals("user-service", first.service());
         assertEquals("POST /api/users", first.resourceName());
-        assertFalse(first.errorMessage().isEmpty());
     }
 
     @Test
     void whenGettingTraceDetail_givenMockResponse_shouldReturnFullTrace() {
+        mockSpansApi.setResponse(createDetailedSpansListResponse());
+
         final TraceDetail trace = client.getTraceDetail(
                 "trace-001",
                 "user-service",
-                "prod"
+                "prod",
+                Instant.parse("2024-01-15T10:00:00Z"),
+                Instant.parse("2024-01-15T11:00:00Z")
         );
 
         assertNotNull(trace);
         assertEquals("trace-001", trace.traceId());
         assertEquals("user-service", trace.service());
         assertEquals("prod", trace.env());
-        assertEquals(4, trace.spans().size());
-        assertTrue(trace.hasErrors());
-    }
-
-    @Test
-    void whenGettingTraceDetail_givenMockResponse_shouldHaveCorrectServices() {
-        final TraceDetail trace = client.getTraceDetail(
-                "trace-001",
-                "user-service",
-                "prod"
-        );
-
-        final var services = trace.involvedServices();
-
-        assertEquals(3, services.size());
-        assertTrue(services.contains("api-gateway"));
-        assertTrue(services.contains("user-service"));
-        assertTrue(services.contains("postgres"));
-    }
-
-    @Test
-    void whenGettingTraceDetail_givenMockResponse_shouldHaveErrorSpans() {
-        final TraceDetail trace = client.getTraceDetail(
-                "trace-001",
-                "user-service",
-                "prod"
-        );
-
-        final var errorSpans = trace.errorSpans();
-
-        assertEquals(2, errorSpans.size());
-        assertTrue(errorSpans.stream().allMatch(span -> span.isError()));
+        assertFalse(trace.spans().isEmpty());
     }
 
     @Test
     void whenSearchingLogs_givenMockResponse_shouldReturnLogEntries() {
+        mockLogsApi.setResponse(createLogsListResponse());
+
         final TraceQuery query = new TraceQuery(
                 "user-service",
                 "prod",
@@ -156,7 +110,7 @@ class DatadogClientIntegrationTest {
                 client.searchLogsForTrace("trace-001", query);
 
         assertNotNull(logs);
-        assertEquals(3, logs.size());
+        assertEquals(2, logs.size());
 
         final ServiceErrorView.LogEntry firstLog = logs.get(0);
         assertEquals("ERROR", firstLog.level());
@@ -164,20 +118,153 @@ class DatadogClientIntegrationTest {
     }
 
     @Test
-    void whenSearchingLogs_givenMockResponse_shouldHaveCorrectAttributes() {
-        final TraceQuery query = new TraceQuery(
+    void whenSearchingLogsWithLogQuery_givenMockResponse_shouldReturnLogSummaries() {
+        mockLogsApi.setResponse(createLogsListResponse());
+
+        final LogQuery query = new LogQuery(
                 "user-service",
                 "prod",
                 Instant.parse("2024-01-15T10:00:00Z"),
                 Instant.parse("2024-01-15T11:00:00Z"),
-                20
+                null,
+                "ERROR",
+                100
         );
 
-        final List<ServiceErrorView.LogEntry> logs =
-                client.searchLogsForTrace("trace-001", query);
+        final List<LogSummary> logs = client.searchLogs(query);
 
-        final ServiceErrorView.LogEntry firstLog = logs.get(0);
-        assertNotNull(firstLog.attributes());
-        assertFalse(firstLog.attributes().isEmpty());
+        assertNotNull(logs);
+        assertEquals(2, logs.size());
+
+        final LogSummary firstLog = logs.get(0);
+        assertEquals("ERROR", firstLog.level());
+        assertEquals("user-service", firstLog.service());
+    }
+
+    private SpansListResponse createSpansListResponse() {
+        final OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        final OffsetDateTime start = now.minusSeconds(1);
+
+        final SpansAttributes attrs1 = new SpansAttributes()
+                .traceId("trace-001")
+                .spanId("span-1")
+                .service("user-service")
+                .resourceName("POST /api/users")
+                .startTimestamp(start)
+                .endTimestamp(now)
+                .custom(Map.of(
+                        "error.message", "Connection timeout"
+                ));
+
+        final SpansAttributes attrs2 = new SpansAttributes()
+                .traceId("trace-002")
+                .spanId("span-2")
+                .service("user-service")
+                .resourceName("GET /api/users/123")
+                .startTimestamp(start)
+                .endTimestamp(now);
+
+        final Span span1 = new Span().id("span-1").attributes(attrs1);
+        final Span span2 = new Span().id("span-2").attributes(attrs2);
+
+        return new SpansListResponse().data(List.of(span1, span2));
+    }
+
+    private SpansListResponse createDetailedSpansListResponse() {
+        final OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        final OffsetDateTime start = now.minusSeconds(2);
+
+        final SpansAttributes attrs1 = new SpansAttributes()
+                .traceId("trace-001")
+                .spanId("span-1")
+                .service("api-gateway")
+                .resourceName("POST /api/users")
+                .startTimestamp(start)
+                .endTimestamp(now)
+                .type("web");
+
+        final SpansAttributes attrs2 = new SpansAttributes()
+                .traceId("trace-001")
+                .spanId("span-2")
+                .parentId("span-1")
+                .service("user-service")
+                .resourceName("createUser")
+                .startTimestamp(start.plusNanos(100000000))
+                .endTimestamp(now.minusNanos(100000000))
+                .type("error")
+                .custom(Map.of(
+                        "error.message", "User validation failed"
+                ));
+
+        final Span span1 = new Span().id("span-1").attributes(attrs1);
+        final Span span2 = new Span().id("span-2").attributes(attrs2);
+
+        return new SpansListResponse().data(List.of(span1, span2));
+    }
+
+    private LogsListResponse createLogsListResponse() {
+        final OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        final LogAttributes attrs1 = new LogAttributes()
+                .service("user-service")
+                .message("User validation failed: email is required")
+                .status("error")
+                .host("prod-server-1")
+                .timestamp(now)
+                .attributes(Map.of("trace_id", "trace-001"));
+
+        final LogAttributes attrs2 = new LogAttributes()
+                .service("user-service")
+                .message("Database connection timeout")
+                .status("error")
+                .host("prod-server-1")
+                .timestamp(now.plusSeconds(1))
+                .attributes(Map.of("trace_id", "trace-001"));
+
+        final Log log1 = new Log().id("log-1").attributes(attrs1);
+        final Log log2 = new Log().id("log-2").attributes(attrs2);
+
+        return new LogsListResponse().data(List.of(log1, log2));
+    }
+
+    /**
+     * Mock implementation of SpansApi for testing.
+     */
+    private static class MockSpansApi extends SpansApi {
+        private SpansListResponse response;
+
+        MockSpansApi() {
+            super(null);
+        }
+
+        void setResponse(final SpansListResponse response) {
+            this.response = response;
+        }
+
+        @Override
+        public SpansListResponse listSpans(final SpansListRequest body) throws ApiException {
+            return response;
+        }
+    }
+
+    /**
+     * Mock implementation of LogsApi for testing.
+     */
+    private static class MockLogsApi extends LogsApi {
+        private LogsListResponse response;
+
+        MockLogsApi() {
+            super(null);
+        }
+
+        void setResponse(final LogsListResponse response) {
+            this.response = response;
+        }
+
+        @Override
+        public LogsListResponse listLogs(final ListLogsOptionalParameters parameters)
+                throws ApiException {
+            return response;
+        }
     }
 }

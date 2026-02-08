@@ -1,5 +1,8 @@
 package co.fanki.datadog.traceinspector.config;
 
+import com.datadog.api.client.ApiClient;
+
+import java.util.HashMap;
 import java.util.Objects;
 
 /**
@@ -91,6 +94,38 @@ public record DatadogConfig(
      */
     public String baseUrl() {
         return "https://api." + site;
+    }
+
+    /**
+     * Builds and configures an ApiClient instance for the Datadog SDK.
+     *
+     * <p>The client is configured with:
+     * <ul>
+     *   <li>API and Application keys for authentication</li>
+     *   <li>Base path matching the configured site</li>
+     *   <li>Connection timeout of 10 seconds</li>
+     *   <li>Read timeout of 30 seconds</li>
+     * </ul>
+     * </p>
+     *
+     * @return a configured ApiClient instance ready for use with Datadog APIs
+     */
+    public ApiClient buildApiClient() {
+        final ApiClient client = ApiClient.getDefaultApiClient();
+
+        final HashMap<String, String> secrets = new HashMap<>();
+        secrets.put("apiKeyAuth", apiKey);
+        secrets.put("appKeyAuth", appKey);
+        client.configureApiKeys(secrets);
+
+        client.setServerIndex(0);
+        client.setServerVariables(new HashMap<>() {{
+            put("site", site);
+        }});
+        client.setConnectTimeout(10_000);
+        client.setReadTimeout(30_000);
+
+        return client;
     }
 
     private static String getRequiredEnv(final String name) {

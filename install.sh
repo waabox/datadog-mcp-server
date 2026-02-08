@@ -129,6 +129,40 @@ setup_paths() {
     fi
 }
 
+# Check if waabox-datadog-mcp is already configured in .claude.json
+check_existing_config() {
+    ALREADY_CONFIGURED=false
+
+    if [ -f "$MCP_CONFIG_FILE" ]; then
+        if command -v jq &> /dev/null; then
+            # Use jq to check if waabox-datadog-mcp exists and has valid API key
+            if jq -e '.mcpServers["waabox-datadog-mcp"]' "$MCP_CONFIG_FILE" &> /dev/null; then
+                API_KEY=$(jq -r '.mcpServers["waabox-datadog-mcp"].env.DATADOG_API_KEY // ""' "$MCP_CONFIG_FILE")
+                if [ -n "$API_KEY" ] && [ "$API_KEY" != "YOUR_API_KEY_HERE" ]; then
+                    ALREADY_CONFIGURED=true
+                fi
+            fi
+        else
+            # Fallback: simple grep check
+            if grep -q '"waabox-datadog-mcp"' "$MCP_CONFIG_FILE" 2>/dev/null; then
+                if ! grep -q 'YOUR_API_KEY_HERE' "$MCP_CONFIG_FILE" 2>/dev/null; then
+                    ALREADY_CONFIGURED=true
+                fi
+            fi
+        fi
+    fi
+
+    if [ "$ALREADY_CONFIGURED" = true ]; then
+        echo ""
+        echo -e "🔍 ${GREEN}Found existing waabox-datadog-mcp configuration!${NC}"
+        echo -e "   Config file: ${CYAN}$MCP_CONFIG_FILE${NC}"
+        echo ""
+        echo -e "   ${YELLOW}Upgrade mode:${NC} Will only build and update the JAR file."
+        echo -e "   Your existing credentials and settings will be preserved."
+        echo ""
+    fi
+}
+
 # Download and build
 download_and_build() {
     echo -e "📥 Downloadin' the treasure from ${CYAN}$REPO_URL${NC} (tag: ${YELLOW}$STABLE_TAG${NC})..."
@@ -276,12 +310,12 @@ configure_claude() {
         if command -v jq &> /dev/null; then
             # Use jq to merge - preserves all existing settings and other MCP servers
             TEMP_FILE=$(mktemp)
-            # First ensure mcpServers key exists, then add/update datadog-traces
+            # First ensure mcpServers key exists, then add/update waabox-datadog-mcp
             jq --arg jar "$JAR_PATH" \
                --arg api_key "$DATADOG_API_KEY" \
                --arg app_key "$DATADOG_APP_KEY" \
                --arg site "$DATADOG_SITE" \
-               '.mcpServers = (.mcpServers // {}) | .mcpServers["datadog-traces"] = {
+               '.mcpServers = (.mcpServers // {}) | .mcpServers["waabox-datadog-mcp"] = {
                    "command": "java",
                    "args": ["-jar", $jar],
                    "env": {
@@ -290,14 +324,14 @@ configure_claude() {
                        "DATADOG_SITE": $site
                    }
                }' "$MCP_CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$MCP_CONFIG_FILE"
-            echo -e "${GREEN}✓ Updated datadog-traces in .claude.json (all other settings preserved)${NC}"
+            echo -e "${GREEN}✓ Updated waabox-datadog-mcp in .claude.json (all other settings preserved)${NC}"
         else
             # No jq - need to be careful not to overwrite other settings
             echo -e "${YELLOW}⚠️  jq not found. Cannot safely merge config.${NC}"
             echo ""
             echo -e "   Please add this to the ${CYAN}mcpServers${NC} section in ${CYAN}$MCP_CONFIG_FILE${NC}:"
             echo ""
-            echo -e "${BLUE}   \"datadog-traces\": {"
+            echo -e "${BLUE}   \"waabox-datadog-mcp\": {"
             echo -e "     \"command\": \"java\","
             echo -e "     \"args\": [\"-jar\", \"$JAR_PATH\"],"
             echo -e "     \"env\": {"
@@ -320,7 +354,7 @@ write_new_config() {
     cat > "$MCP_CONFIG_FILE" << EOF
 {
   "mcpServers": {
-    "datadog-traces": {
+    "waabox-datadog-mcp": {
       "command": "java",
       "args": ["-jar", "$JAR_PATH"],
       "env": {
@@ -347,7 +381,13 @@ cleanup() {
 show_completion() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "${GREEN}🎉 YARR! Installation complete, Captain! 🏴‍☠️${NC}"
+
+    if [ "$ALREADY_CONFIGURED" = true ]; then
+        echo -e "${GREEN}🎉 YARR! Upgrade complete, Captain! 🏴‍☠️${NC}"
+    else
+        echo -e "${GREEN}🎉 YARR! Installation complete, Captain! 🏴‍☠️${NC}"
+    fi
+
     echo ""
     echo -e "╭────────────────────────────────────────────────────────────────╮"
     echo -e "│                                                                │"
@@ -358,7 +398,10 @@ show_completion() {
     echo -e "╰────────────────────────────────────────────────────────────────╯"
     echo ""
 
-    if [[ "$DATADOG_API_KEY" == "YOUR_API_KEY_HERE" ]]; then
+    if [ "$ALREADY_CONFIGURED" = true ]; then
+        echo -e "${GREEN}✓ Your existing configuration was preserved.${NC}"
+        echo ""
+    elif [[ "$DATADOG_API_KEY" == "YOUR_API_KEY_HERE" ]]; then
         echo -e "${YELLOW}⚠️  IMPORTANT: Don't forget to add yer Datadog keys!${NC}"
         echo -e "   Edit: ${CYAN}$MCP_CONFIG_FILE${NC}"
         echo ""
@@ -370,6 +413,8 @@ show_completion() {
     echo ""
     echo -e "   ${CYAN}\"Analyze trace abc123 and help me debug it\"${NC}"
     echo ""
+    echo -e "   ${CYAN}\"Search logs for my-service with level ERROR\"${NC}"
+    echo ""
     echo -e "${YELLOW}Fair winds and following seas, matey! ⚓️${NC}"
     echo ""
 }
@@ -378,10 +423,19 @@ show_completion() {
 main() {
     check_requirements
     setup_paths
+    check_existing_config
     download_and_build
     install_jar
-    get_credentials
-    configure_claude
+
+    if [ "$ALREADY_CONFIGURED" = true ]; then
+        # Skip credentials and config - just update JAR
+        echo -e "${GREEN}✓ JAR updated successfully!${NC}"
+    else
+        # First time install - get credentials and configure
+        get_credentials
+        configure_claude
+    fi
+
     cleanup
     show_completion
 }

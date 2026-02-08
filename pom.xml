@@ -36,6 +36,13 @@
             <version>${jackson.version}</version>
         </dependency>
 
+        <!-- Datadog API Client SDK -->
+        <dependency>
+            <groupId>com.datadoghq</groupId>
+            <artifactId>datadog-api-client</artifactId>
+            <version>2.50.0</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,44 +1,57 @@
 package co.fanki.datadog.traceinspector.datadog;
 
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
-import co.fanki.datadog.traceinspector.datadog.model.LogSearchResponse;
-import co.fanki.datadog.traceinspector.datadog.model.TraceDetailResponse;
-import co.fanki.datadog.traceinspector.datadog.model.TraceSearchResponse;
+import co.fanki.datadog.traceinspector.domain.LogQuery;
+import co.fanki.datadog.traceinspector.domain.LogSummary;
 import co.fanki.datadog.traceinspector.domain.ServiceErrorView;
 import co.fanki.datadog.traceinspector.domain.SpanDetail;
 import co.fanki.datadog.traceinspector.domain.TraceDetail;
 import co.fanki.datadog.traceinspector.domain.TraceQuery;
 import co.fanki.datadog.traceinspector.domain.TraceSummary;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.datadog.api.client.ApiClient;
+import com.datadog.api.client.ApiException;
+import com.datadog.api.client.v2.api.LogsApi;
+import com.datadog.api.client.v2.api.SpansApi;
+import com.datadog.api.client.v2.model.Log;
+import com.datadog.api.client.v2.model.LogsListRequest;
+import com.datadog.api.client.v2.model.LogsListRequestPage;
+import com.datadog.api.client.v2.model.LogsListResponse;
+import com.datadog.api.client.v2.model.LogsQueryFilter;
+import com.datadog.api.client.v2.model.LogsSort;
+import com.datadog.api.client.v2.model.Span;
+import com.datadog.api.client.v2.model.SpansListRequest;
+import com.datadog.api.client.v2.model.SpansListRequestAttributes;
+import com.datadog.api.client.v2.model.SpansListRequestData;
+import com.datadog.api.client.v2.model.SpansListRequestPage;
+import com.datadog.api.client.v2.model.SpansListRequestType;
+import com.datadog.api.client.v2.model.SpansListResponse;
+import com.datadog.api.client.v2.model.SpansQueryFilter;
+import com.datadog.api.client.v2.model.SpansSort;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * HTTP implementation of the DatadogClient interface.
+ * SDK-based implementation of the DatadogClient interface.
  *
- * <p>Uses Java's built-in HttpClient to communicate with Datadog's APIs.
- * Handles authentication, request building, and response parsing.</p>
+ * <p>Uses the official Datadog API client SDK to communicate with Datadog's APIs.
+ * Provides type-safe requests and responses with automatic authentication.</p>
  *
  * @author waabox(emiliano[at]fanki[dot]co)
  */
 public final class DatadogClientImpl implements DatadogClient {
 
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    private static final DateTimeFormatter ISO_FORMATTER =
+            DateTimeFormatter.ISO_INSTANT;
 
-    private final DatadogConfig config;
-    private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
-    private final String baseUrlOverride;
+    private final SpansApi spansApi;
+    private final LogsApi logsApi;
 
     /**
      * Creates a new DatadogClientImpl with the given configuration.
@@ -46,77 +59,78 @@ public final class DatadogClientImpl implements DatadogClient {
      * @param config the Datadog configuration
      */
     public DatadogClientImpl(final DatadogConfig config) {
-        this.config = Objects.requireNonNull(config, "config must not be null");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-        this.objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule());
-        this.baseUrlOverride = null;
+        Objects.requireNonNull(config, "config must not be null");
+        final ApiClient apiClient = config.buildApiClient();
+        this.spansApi = new SpansApi(apiClient);
+        this.logsApi = new LogsApi(apiClient);
     }
 
     /**
-     * Creates a new DatadogClientImpl with custom HTTP client.
-     * Useful for testing with custom base URLs.
+     * Creates a new DatadogClientImpl with custom API instances.
+     * Useful for testing.
      *
-     * @param config the Datadog configuration
-     * @param httpClient the HTTP client to use
+     * @param spansApi the spans API instance
+     * @param logsApi the logs API instance
      */
-    public DatadogClientImpl(final DatadogConfig config, final HttpClient httpClient) {
-        this.config = Objects.requireNonNull(config, "config must not be null");
-        this.httpClient = Objects.requireNonNull(httpClient, "httpClient must not be null");
-        this.objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule());
-        this.baseUrlOverride = null;
-    }
-
-    /**
-     * Creates a new DatadogClientImpl with custom base URL for testing.
-     *
-     * @param config the Datadog configuration
-     * @param baseUrl the base URL to use instead of config's base URL
-     */
-    public DatadogClientImpl(final DatadogConfig config, final String baseUrl) {
-        this.config = Objects.requireNonNull(config, "config must not be null");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-        this.objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule());
-        this.baseUrlOverride = Objects.requireNonNull(baseUrl, "baseUrl must not be null");
-    }
-
-    private String getBaseUrl() {
-        return baseUrlOverride != null ? baseUrlOverride : config.baseUrl();
+    public DatadogClientImpl(final SpansApi spansApi, final LogsApi logsApi) {
+        this.spansApi = Objects.requireNonNull(spansApi, "spansApi must not be null");
+        this.logsApi = Objects.requireNonNull(logsApi, "logsApi must not be null");
     }
 
     @Override
     public List<TraceSummary> searchErrorTraces(final TraceQuery query) {
         Objects.requireNonNull(query, "query must not be null");
 
-        final String requestBody = buildSpanSearchRequest(query);
-        final String url = getBaseUrl() + "/api/v2/spans/events/search";
+        try {
+            final SpansListRequest request = buildSpanSearchRequest(query);
+            final SpansListResponse response = spansApi.listSpans(request);
 
-        final HttpRequest request = buildPostRequest(url, requestBody);
-        final TraceSearchResponse response = executeRequest(request, TraceSearchResponse.class);
-
-        return mapToTraceSummaries(response);
+            return mapToTraceSummaries(response);
+        } catch (final ApiException e) {
+            throw new DatadogApiException(
+                    "Failed to search error traces: " + e.getResponseBody(),
+                    e.getCode()
+            );
+        }
     }
 
     @Override
     public TraceDetail getTraceDetail(
             final String traceId,
             final String service,
-            final String env
+            final String env,
+            final Instant from,
+            final Instant to
     ) {
         Objects.requireNonNull(traceId, "traceId must not be null");
         Objects.requireNonNull(service, "service must not be null");
+        Objects.requireNonNull(from, "from must not be null");
+        Objects.requireNonNull(to, "to must not be null");
 
-        final String url = getBaseUrl() + "/api/v1/trace/" + traceId;
-        final HttpRequest request = buildGetRequest(url);
-        final TraceDetailResponse response = executeRequest(request, TraceDetailResponse.class);
+        try {
+            // trace_id is a reserved attribute in Datadog, no @ prefix needed
+            final SpansQueryFilter filter = new SpansQueryFilter()
+                    .query("trace_id:" + traceId)
+                    .from(formatInstant(from))
+                    .to(formatInstant(to));
 
-        return mapToTraceDetail(response, traceId, service, env != null ? env : "");
+            final SpansListRequest request = new SpansListRequest()
+                    .data(new SpansListRequestData()
+                            .type(SpansListRequestType.SEARCH_REQUEST)
+                            .attributes(new SpansListRequestAttributes()
+                                    .filter(filter)
+                                    .page(new SpansListRequestPage().limit(1000))
+                                    .sort(SpansSort.TIMESTAMP_ASCENDING)));
+
+            final SpansListResponse response = spansApi.listSpans(request);
+
+            return mapToTraceDetail(response, traceId, service, env != null ? env : "");
+        } catch (final ApiException e) {
+            throw new DatadogApiException(
+                    "Failed to get trace detail: " + e.getResponseBody(),
+                    e.getCode()
+            );
+        }
     }
 
     @Override
@@ -127,219 +141,279 @@ public final class DatadogClientImpl implements DatadogClient {
         Objects.requireNonNull(traceId, "traceId must not be null");
         Objects.requireNonNull(query, "query must not be null");
 
-        final String requestBody = buildLogSearchRequest(traceId, query);
-        final String url = getBaseUrl() + "/api/v2/logs/events/search";
-
-        final HttpRequest request = buildPostRequest(url, requestBody);
-        final LogSearchResponse response = executeRequest(request, LogSearchResponse.class);
-
-        return mapToLogEntries(response);
-    }
-
-    private String buildSpanSearchRequest(final TraceQuery query) {
         try {
-            final Map<String, Object> filter = Map.of(
-                    "from", query.from().toString(),
-                    "to", query.to().toString(),
-                    "query", query.toDatadogQuery()
+            // trace_id is a reserved attribute in Datadog, no @ prefix needed
+            final LogsQueryFilter filter = new LogsQueryFilter()
+                    .query("trace_id:" + traceId)
+                    .from(formatInstant(query.from()))
+                    .to(formatInstant(query.to()));
+
+            final LogsListRequest body = new LogsListRequest()
+                    .filter(filter)
+                    .page(new LogsListRequestPage().limit(100))
+                    .sort(LogsSort.TIMESTAMP_ASCENDING);
+
+            final LogsListResponse response = logsApi.listLogs(
+                    new LogsApi.ListLogsOptionalParameters().body(body)
             );
 
-            final Map<String, Object> page = Map.of(
-                    "limit", query.limit()
+            return mapToLogEntries(response);
+        } catch (final ApiException e) {
+            throw new DatadogApiException(
+                    "Failed to search logs for trace: " + e.getResponseBody(),
+                    e.getCode()
             );
-
-            final Map<String, Object> attributes = Map.of(
-                    "filter", filter,
-                    "page", page,
-                    "sort", "-timestamp"
-            );
-
-            final Map<String, Object> data = Map.of(
-                    "type", "search_request",
-                    "attributes", attributes
-            );
-
-            final Map<String, Object> body = Map.of("data", data);
-
-            return objectMapper.writeValueAsString(body);
-        } catch (final IOException e) {
-            throw new DatadogApiException("Failed to build search request", e);
         }
     }
 
-    private String buildLogSearchRequest(final String traceId, final TraceQuery query) {
+    @Override
+    public List<LogSummary> searchLogs(final LogQuery query) {
+        Objects.requireNonNull(query, "query must not be null");
+
         try {
-            final Map<String, Object> filter = Map.of(
-                    "from", query.from().toString(),
-                    "to", query.to().toString(),
-                    "query", "trace_id:" + traceId
+            final LogsQueryFilter filter = new LogsQueryFilter()
+                    .query(query.toDatadogQuery())
+                    .from(formatInstant(query.from()))
+                    .to(formatInstant(query.to()));
+
+            final LogsListRequest body = new LogsListRequest()
+                    .filter(filter)
+                    .page(new LogsListRequestPage().limit(query.limit()))
+                    .sort(LogsSort.TIMESTAMP_DESCENDING);
+
+            final LogsListResponse response = logsApi.listLogs(
+                    new LogsApi.ListLogsOptionalParameters().body(body)
             );
 
-            final Map<String, Object> page = Map.of(
-                    "limit", 100
+            return mapToLogSummaries(response);
+        } catch (final ApiException e) {
+            throw new DatadogApiException(
+                    "Failed to search logs: " + e.getResponseBody(),
+                    e.getCode()
             );
-
-            final Map<String, Object> body = Map.of(
-                    "filter", filter,
-                    "page", page,
-                    "sort", "timestamp"
-            );
-
-            return objectMapper.writeValueAsString(body);
-        } catch (final IOException e) {
-            throw new DatadogApiException("Failed to build log search request", e);
         }
     }
 
-    private HttpRequest buildPostRequest(final String url, final String body) {
-        return HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("Content-Type", "application/json")
-                .header("DD-API-KEY", config.apiKey())
-                .header("DD-APPLICATION-KEY", config.appKey())
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+    private SpansListRequest buildSpanSearchRequest(final TraceQuery query) {
+        final SpansQueryFilter filter = new SpansQueryFilter()
+                .query(query.toDatadogQuery())
+                .from(formatInstant(query.from()))
+                .to(formatInstant(query.to()));
+
+        return new SpansListRequest()
+                .data(new SpansListRequestData()
+                        .type(SpansListRequestType.SEARCH_REQUEST)
+                        .attributes(new SpansListRequestAttributes()
+                                .filter(filter)
+                                .page(new SpansListRequestPage().limit(query.limit()))
+                                .sort(SpansSort.TIMESTAMP_DESCENDING)));
     }
 
-    private HttpRequest buildGetRequest(final String url) {
-        return HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("Content-Type", "application/json")
-                .header("DD-API-KEY", config.apiKey())
-                .header("DD-APPLICATION-KEY", config.appKey())
-                .GET()
-                .build();
+    private String formatInstant(final Instant instant) {
+        return ISO_FORMATTER.format(instant);
     }
 
-    private <T> T executeRequest(final HttpRequest request, final Class<T> responseType) {
-        try {
-            final HttpResponse<String> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString()
-            );
-
-            if (response.statusCode() >= 400) {
-                throw new DatadogApiException(
-                        "API request failed: " + response.body(),
-                        response.statusCode()
-                );
-            }
-
-            return objectMapper.readValue(response.body(), responseType);
-        } catch (final IOException e) {
-            throw new DatadogApiException("Failed to execute request", e);
-        } catch (final InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new DatadogApiException("Request interrupted", e);
-        }
-    }
-
-    private List<TraceSummary> mapToTraceSummaries(final TraceSearchResponse response) {
-        if (response == null || response.data() == null) {
+    private List<TraceSummary> mapToTraceSummaries(final SpansListResponse response) {
+        if (response == null || response.getData() == null) {
             return List.of();
         }
 
-        return response.data().stream()
-                .filter(event -> event.attributes() != null)
-                .map(event -> {
-                    final TraceSearchResponse.SpanAttributes attrs = event.attributes();
-                    return new TraceSummary(
-                            attrs.traceId(),
-                            attrs.service(),
-                            attrs.resourceName(),
-                            attrs.errorMessage(),
-                            parseTimestamp(attrs.timestamp()),
-                            attrs.duration() != null ? attrs.duration() : 0L
-                    );
-                })
+        return response.getData().stream()
+                .filter(span -> span.getAttributes() != null)
+                .map(this::mapSpanToTraceSummary)
                 .toList();
     }
 
+    private TraceSummary mapSpanToTraceSummary(final Span span) {
+        final var attrs = span.getAttributes();
+        final Map<String, Object> customAttrs = attrs.getCustom() != null
+                ? attrs.getCustom()
+                : Map.of();
+
+        // trace_id is a reserved attribute with its own getter in the SDK
+        final String traceId = attrs.getTraceId() != null ? attrs.getTraceId() : "";
+        final String service = attrs.getService() != null ? attrs.getService() : "";
+        final String resourceName = attrs.getResourceName() != null ? attrs.getResourceName() : "";
+        final String errorMessage = extractAttribute(customAttrs, "error.message", "");
+
+        final Instant timestamp = parseTimestamp(attrs.getEndTimestamp());
+        final long duration = calculateDuration(attrs.getStartTimestamp(), attrs.getEndTimestamp());
+
+        return new TraceSummary(traceId, service, resourceName, errorMessage, timestamp, duration);
+    }
+
     private TraceDetail mapToTraceDetail(
-            final TraceDetailResponse response,
+            final SpansListResponse response,
             final String traceId,
             final String service,
             final String env
     ) {
-        if (response == null || !response.hasData()) {
-            return new TraceDetail(
-                    traceId,
-                    service,
-                    env,
-                    "",
-                    Instant.now(),
-                    0L,
-                    List.of()
-            );
+        if (response == null || response.getData() == null || response.getData().isEmpty()) {
+            return new TraceDetail(traceId, service, env, "", Instant.now(), 0L, List.of());
         }
 
-        final TraceDetailResponse.TraceAttributes attrs = response.data().attributes();
-
-        final List<SpanDetail> spans = attrs.safeSpans().stream()
+        final List<SpanDetail> spans = response.getData().stream()
+                .filter(span -> span.getAttributes() != null)
                 .map(this::mapToSpanDetail)
                 .toList();
 
-        return new TraceDetail(
-                attrs.traceId() != null ? attrs.traceId() : traceId,
-                attrs.service() != null ? attrs.service() : service,
-                attrs.env() != null ? attrs.env() : env,
-                attrs.resourceName(),
-                attrs.start() != null
-                        ? Instant.ofEpochMilli(attrs.start() / 1_000_000)
-                        : Instant.now(),
-                attrs.duration() != null ? attrs.duration() : 0L,
-                spans
-        );
+        final Span firstSpan = response.getData().get(0);
+        final var attrs = firstSpan.getAttributes();
+
+        final Instant startTime = parseTimestamp(attrs.getStartTimestamp());
+
+        final long totalDuration = spans.stream()
+                .mapToLong(SpanDetail::duration)
+                .max()
+                .orElse(0L);
+
+        final String resourceName = attrs != null && attrs.getResourceName() != null
+                ? attrs.getResourceName()
+                : "";
+
+        return new TraceDetail(traceId, service, env, resourceName, startTime, totalDuration, spans);
     }
 
-    private SpanDetail mapToSpanDetail(final TraceDetailResponse.Span span) {
+    private SpanDetail mapToSpanDetail(final Span span) {
+        final var attrs = span.getAttributes();
+        final Map<String, Object> customAttrs = attrs.getCustom() != null
+                ? attrs.getCustom()
+                : Map.of();
+
+        // spanId and parentId are reserved attributes with their own getters
+        final String spanId = attrs.getSpanId() != null ? attrs.getSpanId() : "";
+        final String parentId = attrs.getParentId();
+        final String service = attrs.getService() != null ? attrs.getService() : "";
+        final String operationName = extractAttribute(customAttrs, "operation_name", "");
+        final String resourceName = attrs.getResourceName() != null ? attrs.getResourceName() : "";
+
+        final Instant startTime = parseTimestamp(attrs.getStartTimestamp());
+        final long duration = calculateDuration(attrs.getStartTimestamp(), attrs.getEndTimestamp());
+
+        final String spanType = attrs.getType() != null ? attrs.getType() : "";
+        final boolean isError = "error".equalsIgnoreCase(spanType)
+                || extractAttribute(customAttrs, "error", "").equals("true")
+                || extractAttribute(customAttrs, "error.message", null) != null;
+        final String errorMessage = extractAttribute(customAttrs, "error.message", null);
+        final String errorType = extractAttribute(customAttrs, "error.type", null);
+        final String errorStack = extractAttribute(customAttrs, "error.stack", null);
+
+        final Map<String, String> tags = flattenAttributes(customAttrs);
+
         return new SpanDetail(
-                span.spanId(),
-                span.parentId(),
-                span.service(),
-                span.operationName(),
-                span.resource(),
-                span.start() != null
-                        ? Instant.ofEpochMilli(span.start() / 1_000_000)
-                        : Instant.now(),
-                span.duration() != null ? span.duration() : 0L,
-                span.isError(),
-                span.errorMessage(),
-                span.errorType(),
-                span.errorStack(),
-                span.safeMeta()
+                spanId, parentId, service, operationName, resourceName,
+                startTime, duration, isError, errorMessage, errorType, errorStack, tags
         );
     }
 
-    private List<ServiceErrorView.LogEntry> mapToLogEntries(final LogSearchResponse response) {
-        return response.safeLogs().stream()
-                .filter(log -> log.attributes() != null)
-                .map(log -> {
-                    final LogSearchResponse.LogAttributes attrs = log.attributes();
-                    return new ServiceErrorView.LogEntry(
-                            parseTimestamp(attrs.timestamp()),
-                            attrs.level(),
-                            attrs.message(),
-                            attrs.flattenedAttributes()
-                    );
-                })
+    private List<ServiceErrorView.LogEntry> mapToLogEntries(final LogsListResponse response) {
+        if (response == null || response.getData() == null) {
+            return List.of();
+        }
+
+        return response.getData().stream()
+                .filter(log -> log.getAttributes() != null)
+                .map(this::mapToLogEntry)
                 .toList();
     }
 
-    private Instant parseTimestamp(final String timestamp) {
-        if (timestamp == null || timestamp.isBlank()) {
+    private ServiceErrorView.LogEntry mapToLogEntry(final Log log) {
+        final var attrs = log.getAttributes();
+        final Map<String, Object> customAttrs = attrs.getAttributes() != null
+                ? attrs.getAttributes()
+                : Map.of();
+
+        final Instant timestamp = parseTimestamp(attrs.getTimestamp());
+        final String level = attrs.getStatus() != null
+                ? attrs.getStatus().toUpperCase()
+                : "INFO";
+        final String message = attrs.getMessage() != null ? attrs.getMessage() : "";
+        final Map<String, String> attributes = flattenAttributes(customAttrs);
+
+        return new ServiceErrorView.LogEntry(timestamp, level, message, attributes);
+    }
+
+    private List<LogSummary> mapToLogSummaries(final LogsListResponse response) {
+        if (response == null || response.getData() == null) {
+            return List.of();
+        }
+
+        return response.getData().stream()
+                .filter(log -> log.getAttributes() != null)
+                .map(this::mapToLogSummary)
+                .toList();
+    }
+
+    private LogSummary mapToLogSummary(final Log log) {
+        final var attrs = log.getAttributes();
+        final Map<String, Object> customAttrs = attrs.getAttributes() != null
+                ? attrs.getAttributes()
+                : Map.of();
+
+        final Instant timestamp = parseTimestamp(attrs.getTimestamp());
+        final String level = attrs.getStatus() != null
+                ? attrs.getStatus().toUpperCase()
+                : "INFO";
+        final String service = attrs.getService() != null ? attrs.getService() : "";
+        final String message = attrs.getMessage() != null ? attrs.getMessage() : "";
+        final String host = attrs.getHost() != null ? attrs.getHost() : "";
+
+        final String traceId = extractAttribute(customAttrs, "trace_id",
+                extractAttribute(customAttrs, "dd.trace_id", ""));
+
+        return new LogSummary(timestamp, level, service, message, host, traceId);
+    }
+
+    private Instant parseTimestamp(final OffsetDateTime dateTime) {
+        if (dateTime == null) {
             return Instant.now();
         }
+        return dateTime.toInstant();
+    }
+
+    private long calculateDuration(final OffsetDateTime start, final OffsetDateTime end) {
+        if (start == null || end == null) {
+            return 0L;
+        }
+        return java.time.Duration.between(start, end).toNanos();
+    }
+
+    private long parseDuration(final Map<String, Object> attrs) {
+        final Object duration = attrs.get("duration");
+        if (duration == null) {
+            return 0L;
+        }
+        if (duration instanceof Number number) {
+            return number.longValue();
+        }
         try {
-            return Instant.parse(timestamp);
-        } catch (final Exception e) {
-            try {
-                return Instant.ofEpochMilli(Long.parseLong(timestamp));
-            } catch (final Exception e2) {
-                return Instant.now();
+            return Long.parseLong(duration.toString());
+        } catch (final NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    private String extractAttribute(final Map<String, Object> attributes,
+                                    final String key,
+                                    final String defaultValue) {
+        if (attributes == null) {
+            return defaultValue;
+        }
+        final Object value = attributes.get(key);
+        return value != null ? value.toString() : defaultValue;
+    }
+
+    private Map<String, String> flattenAttributes(final Map<String, Object> attributes) {
+        if (attributes == null) {
+            return Map.of();
+        }
+
+        final Map<String, String> result = new HashMap<>();
+        for (final var entry : attributes.entrySet()) {
+            if (entry.getValue() != null) {
+                result.put(entry.getKey(), entry.getValue().toString());
             }
         }
+        return result;
     }
 }
