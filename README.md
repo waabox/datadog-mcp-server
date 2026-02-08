@@ -4,30 +4,18 @@ An MCP (Model Context Protocol) server that enables AI assistants like Claude to
 
 ## Quick Install
 
-```bash
-# Download the latest release
-curl -L -o datadog-mcp-server.jar \
-  https://github.com/waabox/datadog-mcp-server/releases/latest/download/datadog-mcp-server-1.0.0-SNAPSHOT.jar
-
-# Download and run the installer
-curl -L -o install.sh \
-  https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/install.sh
-chmod +x install.sh
-./install.sh
-```
-
-Or if you cloned the repo:
+**Requirements:** Java 21+, Maven 3.8+
 
 ```bash
-# Build and install
-mvn clean package
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/install.sh | bash
 ```
 
 The installer will:
-1. Copy the JAR to `~/.claude/apps/mcp/`
-2. Configure Claude Code's `mcp.json`
-3. Ask for your Datadog API keys (optional during install)
+1. Download the latest stable version from git
+2. Build the project (skips tests for speed)
+3. Copy the JAR to `~/.claude/apps/mcp/`
+4. Configure Claude Code's `mcp.json`
+5. Ask for your Datadog API keys (optional - you can add them later)
 
 Restart Claude Code and you're ready to hunt production errors! 🏴‍☠️
 
