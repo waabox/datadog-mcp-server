@@ -16,7 +16,6 @@ NC='\033[0m' # No Color
 # Configuration
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
 STABLE_TAG="v1.0.0"
-BUILD_JAR_NAME="datadog-mcp-server-1.0.0-SNAPSHOT.jar"
 JAR_NAME="datadog-mcp-server-1.0.0.jar"
 
 # Pirate banner
@@ -160,7 +159,7 @@ download_and_build() {
     # Build without tests
     mvn clean package -DskipTests -q
 
-    if [ ! -f "target/$BUILD_JAR_NAME" ]; then
+    if [ ! -f "target/$JAR_NAME" ]; then
         echo -e "${RED}✗ Build failed! The JAR file was not created.${NC}"
         exit 1
     fi
@@ -168,8 +167,8 @@ download_and_build() {
     echo -e "${GREEN}✓ Build successful!${NC}"
     echo ""
 
-    # Set JAR source path (points to the SNAPSHOT jar from build)
-    JAR_SOURCE="$(pwd)/target/$BUILD_JAR_NAME"
+    # Set JAR source path
+    JAR_SOURCE="$(pwd)/target/$JAR_NAME"
 }
 
 # Install JAR
