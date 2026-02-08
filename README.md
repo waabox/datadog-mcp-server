@@ -51,13 +51,40 @@ Deep-dive into spans, logs, stack traces, and generate a full diagnostic markdow
 
 ## Creating Your Datadog Keys
 
-### API Key  
-Create via **Organization Settings → API Keys**.
+You need two keys from Datadog: an **API Key** and an **Application Key**.
 
-### Application Key  
-Requires scopes:  
-- `apm_read`  
-- `logs_read_data`  
+### Step 1: Get Your API Key
+
+1. Log in to [Datadog](https://app.datadoghq.com)
+2. Go to **Organization Settings** (bottom-left menu)
+3. Navigate to **ACCESS** → **API Keys**
+4. Click **+ New Key**
+5. Give it a name (e.g., `MCP Server`)
+6. Copy the key value (32-character hex string like `abcd1234abcd1234abcd1234abcd1234`)
+
+> **Note:** The API Key is different from the Key ID. Copy the actual key value, not the UUID.
+
+### Step 2: Get Your Application Key
+
+1. In **Organization Settings**, go to **ACCESS** → **Application Keys**
+2. Click **+ New Key**
+3. Give it a name (e.g., `MCP Server`)
+4. **Important:** Configure the required scopes:
+   - `apm_read` - Read APM traces and spans
+   - `logs_read_data` - Read log data
+5. Copy the key value (40-character string like `abcd1234abcd1234abcd1234abcd1234abcd1234`)
+
+> **Note:** Copy the actual key value from the KEY column, not the Key ID.
+
+### Step 3: Configure Environment Variables
+
+Set these in your MCP configuration:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATADOG_API_KEY` | Your API Key (32 chars) | `abcd1234abcd1234abcd1234abcd1234` |
+| `DATADOG_APP_KEY` | Your Application Key (40 chars) | `abcd1234abcd1234abcd1234abcd1234abcd1234` |
+| `DATADOG_SITE` | Your Datadog site (optional) | `datadoghq.com` |
 
 ---
 
@@ -81,20 +108,25 @@ target/datadog-mcp-server-1.0.0-SNAPSHOT.jar
 
 ## MCP Configuration (Claude Code)
 
+Add this to your `~/.claude.json`:
+
 ```json
 {
   "mcpServers": {
-    "datadog-traces": {
+    "waabox-datadog-mcp": {
       "command": "java",
-      "args": ["-jar", "/absolute/path/to/datadog.jar"],
+      "args": ["-jar", "/Users/YOUR_USER/.claude/apps/mcp/datadog-mcp-server-1.1.0.jar"],
       "env": {
-        "DATADOG_API_KEY": "your-key",
-        "DATADOG_APP_KEY": "your-key"
+        "DATADOG_API_KEY": "your-api-key-here",
+        "DATADOG_APP_KEY": "your-app-key-here",
+        "DATADOG_SITE": "datadoghq.com"
       }
     }
   }
 }
 ```
+
+Replace `YOUR_USER` with your username and update the keys with your actual Datadog credentials.
 
 ---
 
