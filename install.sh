@@ -16,7 +16,8 @@ NC='\033[0m' # No Color
 # Configuration
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
 STABLE_TAG="v1.0.0"
-JAR_NAME="datadog-mcp-server-1.0.0-SNAPSHOT.jar"
+BUILD_JAR_NAME="datadog-mcp-server-1.0.0-SNAPSHOT.jar"
+JAR_NAME="datadog-mcp-server-1.0.0.jar"
 
 # Pirate banner
 echo ""
@@ -117,12 +118,12 @@ setup_paths() {
         CLAUDE_CONFIG_DIR="$HOME/.claude"
         MCP_APPS_DIR="$HOME/.claude/apps/mcp"
         MCP_CONFIG_FILE="$CLAUDE_CONFIG_DIR/mcp.json"
-        TEMP_BUILD_DIR=$(mktemp -d)
+        TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     elif [ "$MACHINE" = "Windows" ]; then
         CLAUDE_CONFIG_DIR="$APPDATA/claude"
         MCP_APPS_DIR="$APPDATA/claude/apps/mcp"
         MCP_CONFIG_FILE="$CLAUDE_CONFIG_DIR/mcp.json"
-        TEMP_BUILD_DIR=$(mktemp -d)
+        TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     else
         echo -e "${RED}Blimey! I don't recognize this operating system: $MACHINE${NC}"
         exit 1
@@ -134,6 +135,8 @@ download_and_build() {
     echo -e "📥 Downloadin' the treasure from ${CYAN}$REPO_URL${NC} (tag: ${YELLOW}$STABLE_TAG${NC})..."
     echo ""
 
+    # Create temp directory in /tmp
+    mkdir -p "$TEMP_BUILD_DIR"
     cd "$TEMP_BUILD_DIR"
 
     if command -v git &> /dev/null; then
@@ -157,7 +160,7 @@ download_and_build() {
     # Build without tests
     mvn clean package -DskipTests -q
 
-    if [ ! -f "target/$JAR_NAME" ]; then
+    if [ ! -f "target/$BUILD_JAR_NAME" ]; then
         echo -e "${RED}✗ Build failed! The JAR file was not created.${NC}"
         exit 1
     fi
@@ -165,8 +168,8 @@ download_and_build() {
     echo -e "${GREEN}✓ Build successful!${NC}"
     echo ""
 
-    # Set JAR source path
-    JAR_SOURCE="$(pwd)/target/$JAR_NAME"
+    # Set JAR source path (points to the SNAPSHOT jar from build)
+    JAR_SOURCE="$(pwd)/target/$BUILD_JAR_NAME"
 }
 
 # Install JAR
