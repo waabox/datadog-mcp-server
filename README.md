@@ -590,6 +590,53 @@ Replace `YOUR_USER` with your username and update the keys with your actual Data
 
 ---
 
+## Docker Setup
+
+You can run the MCP server as a Docker container, which removes the need for a local Java installation.
+
+### 1. Build the image
+
+```bash
+git clone https://github.com/waabox/datadog-mcp-server.git
+cd datadog-mcp-server
+docker build -t datadog-mcp-server .
+```
+
+### 2. Configure Claude Code
+
+Add this to your `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "waabox-datadog-mcp": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--env", "DATADOG_API_KEY=your-api-key-here",
+        "--env", "DATADOG_APP_KEY=your-app-key-here",
+        "--env", "DATADOG_SITE=datadoghq.com",
+        "datadog-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+Replace the key values with your actual Datadog credentials.
+
+### Rebuilding after updates
+
+To pick up new changes from the repository, rebuild with `--no-cache`:
+
+```bash
+docker build --no-cache -t datadog-mcp-server .
+```
+
+---
+
 ## Datadog Sites
 
 | Region | Site |
