@@ -25,7 +25,7 @@ mvn test -Dtest=LogGroupSummaryTest
 mvn test -Dtest=LogGroupSummaryTest#whenExtractingPattern_givenUuid_shouldReplaceWithPlaceholder
 
 # Run the server locally (requires env vars)
-java --enable-preview -jar target/datadog-mcp-server-1.3.1.jar
+java --enable-preview -jar target/datadog-mcp-server-1.3.2.jar
 ```
 
 ## Required Environment Variables
