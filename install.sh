@@ -96,11 +96,11 @@ setup_paths() {
     if [ "$MACHINE" = "Mac" ] || [ "$MACHINE" = "Linux" ]; then
         CLAUDE_CONFIG_DIR="$HOME/.claude"
         MCP_APPS_DIR="$HOME/.claude/apps/mcp"
-        MCP_CONFIG_FILE="$HOME/.claude/mcp.json"
+        MCP_CONFIG_FILE="$HOME/.claude.json"
     elif [ "$MACHINE" = "Windows" ]; then
         CLAUDE_CONFIG_DIR="$APPDATA/claude"
         MCP_APPS_DIR="$APPDATA/claude/apps/mcp"
-        MCP_CONFIG_FILE="$APPDATA/claude/mcp.json"
+        MCP_CONFIG_FILE="$APPDATA/.claude.json"
     else
         echo -e "${RED}Blimey! I don't recognize this operating system: $MACHINE${NC}"
         exit 1
