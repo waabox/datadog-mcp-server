@@ -145,8 +145,10 @@ public final class LogCorrelateTool implements McpTool {
             final Instant from = parseTimestamp(getRequiredString(arguments, "from"));
             final Instant to = parseTimestamp(getRequiredString(arguments, "to"));
             final boolean includeTrace = getOptionalBoolean(arguments, "includeTrace", true);
+            final String currentProject = FilterConfigStore.detectCurrentProject();
             final List<String> relevantPackages = getOptionalStringList(
-                    arguments, "relevantPackages", filterConfigStore.getRelevantPackages()
+                    arguments, "relevantPackages",
+                    filterConfigStore.getRelevantPackages(currentProject)
             );
             final StackTraceDetail stackTraceDetail = parseStackTraceDetail(
                     getOptionalString(arguments, "stackTraceDetail", "full")

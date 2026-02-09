@@ -164,8 +164,10 @@ public final class LogSearchTool implements McpTool {
             final int limit = getOptionalInt(arguments, "limit", 100);
             final String outputMode = getOptionalString(arguments, "outputMode", "full");
             final int maxMessageLength = getOptionalInt(arguments, "maxMessageLength", 500);
+            final String currentProject = FilterConfigStore.detectCurrentProject();
             final List<String> relevantPackages = getOptionalStringList(
-                    arguments, "relevantPackages", filterConfigStore.getRelevantPackages()
+                    arguments, "relevantPackages",
+                    filterConfigStore.getRelevantPackages(currentProject)
             );
             final StackTraceDetail stackTraceDetail = parseStackTraceDetail(
                     getOptionalString(arguments, "stackTraceDetail", "full")
