@@ -52,6 +52,7 @@ public final class DatadogClientImpl implements DatadogClient {
 
     private final SpansApi spansApi;
     private final LogsApi logsApi;
+    private final RetryExecutor retryExecutor;
 
     /**
      * Creates a new DatadogClientImpl with the given configuration.
@@ -59,10 +60,22 @@ public final class DatadogClientImpl implements DatadogClient {
      * @param config the Datadog configuration
      */
     public DatadogClientImpl(final DatadogConfig config) {
+        this(config, RetryConfig.defaults());
+    }
+
+    /**
+     * Creates a new DatadogClientImpl with the given configuration and retry settings.
+     *
+     * @param config the Datadog configuration
+     * @param retryConfig the retry configuration
+     */
+    public DatadogClientImpl(final DatadogConfig config, final RetryConfig retryConfig) {
         Objects.requireNonNull(config, "config must not be null");
+        Objects.requireNonNull(retryConfig, "retryConfig must not be null");
         final ApiClient apiClient = config.buildApiClient();
         this.spansApi = new SpansApi(apiClient);
         this.logsApi = new LogsApi(apiClient);
+        this.retryExecutor = new RetryExecutor(retryConfig);
     }
 
     /**
@@ -73,25 +86,40 @@ public final class DatadogClientImpl implements DatadogClient {
      * @param logsApi the logs API instance
      */
     public DatadogClientImpl(final SpansApi spansApi, final LogsApi logsApi) {
+        this(spansApi, logsApi, RetryConfig.defaults());
+    }
+
+    /**
+     * Creates a new DatadogClientImpl with custom API instances and retry config.
+     * Useful for testing.
+     *
+     * @param spansApi the spans API instance
+     * @param logsApi the logs API instance
+     * @param retryConfig the retry configuration
+     */
+    public DatadogClientImpl(
+            final SpansApi spansApi,
+            final LogsApi logsApi,
+            final RetryConfig retryConfig
+    ) {
         this.spansApi = Objects.requireNonNull(spansApi, "spansApi must not be null");
         this.logsApi = Objects.requireNonNull(logsApi, "logsApi must not be null");
+        this.retryExecutor = new RetryExecutor(
+                Objects.requireNonNull(retryConfig, "retryConfig must not be null")
+        );
     }
 
     @Override
     public List<TraceSummary> searchErrorTraces(final TraceQuery query) {
         Objects.requireNonNull(query, "query must not be null");
 
-        try {
-            final SpansListRequest request = buildSpanSearchRequest(query);
-            final SpansListResponse response = spansApi.listSpans(request);
+        final SpansListRequest request = buildSpanSearchRequest(query);
+        final SpansListResponse response = retryExecutor.execute(
+                () -> spansApi.listSpans(request),
+                "search error traces"
+        );
 
-            return mapToTraceSummaries(response);
-        } catch (final ApiException e) {
-            throw new DatadogApiException(
-                    "Failed to search error traces: " + e.getResponseBody(),
-                    e.getCode()
-            );
-        }
+        return mapToTraceSummaries(response);
     }
 
     @Override
@@ -107,30 +135,26 @@ public final class DatadogClientImpl implements DatadogClient {
         Objects.requireNonNull(from, "from must not be null");
         Objects.requireNonNull(to, "to must not be null");
 
-        try {
-            // trace_id is a reserved attribute in Datadog, no @ prefix needed
-            final SpansQueryFilter filter = new SpansQueryFilter()
-                    .query("trace_id:" + traceId)
-                    .from(formatInstant(from))
-                    .to(formatInstant(to));
+        // trace_id is a reserved attribute in Datadog, no @ prefix needed
+        final SpansQueryFilter filter = new SpansQueryFilter()
+                .query("trace_id:" + traceId)
+                .from(formatInstant(from))
+                .to(formatInstant(to));
 
-            final SpansListRequest request = new SpansListRequest()
-                    .data(new SpansListRequestData()
-                            .type(SpansListRequestType.SEARCH_REQUEST)
-                            .attributes(new SpansListRequestAttributes()
-                                    .filter(filter)
-                                    .page(new SpansListRequestPage().limit(1000))
-                                    .sort(SpansSort.TIMESTAMP_ASCENDING)));
+        final SpansListRequest request = new SpansListRequest()
+                .data(new SpansListRequestData()
+                        .type(SpansListRequestType.SEARCH_REQUEST)
+                        .attributes(new SpansListRequestAttributes()
+                                .filter(filter)
+                                .page(new SpansListRequestPage().limit(1000))
+                                .sort(SpansSort.TIMESTAMP_ASCENDING)));
 
-            final SpansListResponse response = spansApi.listSpans(request);
+        final SpansListResponse response = retryExecutor.execute(
+                () -> spansApi.listSpans(request),
+                "get trace detail"
+        );
 
-            return mapToTraceDetail(response, traceId, service, env != null ? env : "");
-        } catch (final ApiException e) {
-            throw new DatadogApiException(
-                    "Failed to get trace detail: " + e.getResponseBody(),
-                    e.getCode()
-            );
-        }
+        return mapToTraceDetail(response, traceId, service, env != null ? env : "");
     }
 
     @Override
@@ -141,57 +165,45 @@ public final class DatadogClientImpl implements DatadogClient {
         Objects.requireNonNull(traceId, "traceId must not be null");
         Objects.requireNonNull(query, "query must not be null");
 
-        try {
-            // trace_id is a reserved attribute in Datadog, no @ prefix needed
-            final LogsQueryFilter filter = new LogsQueryFilter()
-                    .query("trace_id:" + traceId)
-                    .from(formatInstant(query.from()))
-                    .to(formatInstant(query.to()));
+        // trace_id is a reserved attribute in Datadog, no @ prefix needed
+        final LogsQueryFilter filter = new LogsQueryFilter()
+                .query("trace_id:" + traceId)
+                .from(formatInstant(query.from()))
+                .to(formatInstant(query.to()));
 
-            final LogsListRequest body = new LogsListRequest()
-                    .filter(filter)
-                    .page(new LogsListRequestPage().limit(100))
-                    .sort(LogsSort.TIMESTAMP_ASCENDING);
+        final LogsListRequest body = new LogsListRequest()
+                .filter(filter)
+                .page(new LogsListRequestPage().limit(100))
+                .sort(LogsSort.TIMESTAMP_ASCENDING);
 
-            final LogsListResponse response = logsApi.listLogs(
-                    new LogsApi.ListLogsOptionalParameters().body(body)
-            );
+        final LogsListResponse response = retryExecutor.execute(
+                () -> logsApi.listLogs(new LogsApi.ListLogsOptionalParameters().body(body)),
+                "search logs for trace"
+        );
 
-            return mapToLogEntries(response);
-        } catch (final ApiException e) {
-            throw new DatadogApiException(
-                    "Failed to search logs for trace: " + e.getResponseBody(),
-                    e.getCode()
-            );
-        }
+        return mapToLogEntries(response);
     }
 
     @Override
     public List<LogSummary> searchLogs(final LogQuery query) {
         Objects.requireNonNull(query, "query must not be null");
 
-        try {
-            final LogsQueryFilter filter = new LogsQueryFilter()
-                    .query(query.toDatadogQuery())
-                    .from(formatInstant(query.from()))
-                    .to(formatInstant(query.to()));
+        final LogsQueryFilter filter = new LogsQueryFilter()
+                .query(query.toDatadogQuery())
+                .from(formatInstant(query.from()))
+                .to(formatInstant(query.to()));
 
-            final LogsListRequest body = new LogsListRequest()
-                    .filter(filter)
-                    .page(new LogsListRequestPage().limit(query.limit()))
-                    .sort(LogsSort.TIMESTAMP_DESCENDING);
+        final LogsListRequest body = new LogsListRequest()
+                .filter(filter)
+                .page(new LogsListRequestPage().limit(query.limit()))
+                .sort(LogsSort.TIMESTAMP_DESCENDING);
 
-            final LogsListResponse response = logsApi.listLogs(
-                    new LogsApi.ListLogsOptionalParameters().body(body)
-            );
+        final LogsListResponse response = retryExecutor.execute(
+                () -> logsApi.listLogs(new LogsApi.ListLogsOptionalParameters().body(body)),
+                "search logs"
+        );
 
-            return mapToLogSummaries(response);
-        } catch (final ApiException e) {
-            throw new DatadogApiException(
-                    "Failed to search logs: " + e.getResponseBody(),
-                    e.getCode()
-            );
-        }
+        return mapToLogSummaries(response);
     }
 
     private SpansListRequest buildSpanSearchRequest(final TraceQuery query) {

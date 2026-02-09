@@ -48,7 +48,9 @@ co.fanki.datadog.traceinspector
 │   └── DatadogConfig         # Environment-based configuration (record)
 ├── datadog/
 │   ├── DatadogClient         # Interface for Datadog API operations
-│   └── DatadogClientImpl     # Implementation using Datadog SDK
+│   ├── DatadogClientImpl     # Implementation using Datadog SDK
+│   ├── RetryExecutor         # Retry with exponential backoff
+│   └── RetryConfig           # Retry configuration (attempts, delays, retryable codes)
 ├── domain/                   # Rich domain models (records, immutable)
 │   ├── TraceQuery, TraceSummary, TraceDetail, SpanDetail
 │   ├── LogQuery, LogSummary, LogGroupSummary
@@ -79,6 +81,8 @@ co.fanki.datadog.traceinspector
 4. **Pattern Extraction**: `LogGroupSummary.extractPattern()` normalizes log messages by replacing UUIDs, timestamps, IPs, and numeric IDs with placeholders for grouping.
 
 5. **Scenario Extraction**: `TraceScenarioExtractor` classifies spans by type (HTTP, DB, Cache, Queue, Internal) using tag prefixes and extracts structured test data.
+
+6. **Retry with Exponential Backoff**: `RetryExecutor` wraps all Datadog API calls with configurable retry logic. Retries on 429 (rate limit), 500, 502, 503, 504. Default: 3 attempts, 500ms initial delay, 2x multiplier, 5s max delay.
 
 ### Adding a New Tool
 
