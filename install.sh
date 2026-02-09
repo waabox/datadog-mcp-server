@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
-STABLE_TAG="v1.3.2"
-JAR_NAME="datadog-mcp-server-1.3.2.jar"
+STABLE_TAG="v1.4.0"
+JAR_NAME="datadog-mcp-server-1.4.0.jar"
 JAR_DOWNLOAD_URL="$REPO_URL/releases/download/$STABLE_TAG/$JAR_NAME"
 
 # Pirate banner
@@ -147,8 +147,12 @@ download_jar() {
     echo -e "   ${CYAN}$JAR_DOWNLOAD_URL${NC}"
     echo ""
 
-    # Create destination directory
+    # Create destination directory and data directory for config persistence
     mkdir -p "$MCP_APPS_DIR"
+    mkdir -p "$MCP_APPS_DIR/data"
+
+    # Clean up old versions of the JAR
+    cleanup_old_versions
 
     # Download JAR directly to destination
     if curl -fsSL "$JAR_DOWNLOAD_URL" -o "$MCP_APPS_DIR/$JAR_NAME"; then
@@ -160,6 +164,23 @@ download_jar() {
     fi
 
     echo ""
+}
+
+# Clean up old versions of the JAR
+cleanup_old_versions() {
+    # Find and remove old datadog-mcp-server-*.jar files (but not the current version)
+    OLD_JARS=$(find "$MCP_APPS_DIR" -maxdepth 1 -name "datadog-mcp-server-*.jar" ! -name "$JAR_NAME" 2>/dev/null)
+
+    if [ -n "$OLD_JARS" ]; then
+        echo -e "🧹 Cleanin' up old versions of the treasure..."
+        while IFS= read -r old_jar; do
+            if [ -f "$old_jar" ]; then
+                rm -f "$old_jar"
+                echo -e "   ${YELLOW}✓ Removed: $(basename "$old_jar")${NC}"
+            fi
+        done <<< "$OLD_JARS"
+        echo ""
+    fi
 }
 
 # Get Datadog credentials
@@ -326,6 +347,7 @@ show_completion() {
     echo -e "│                                                                │"
     echo -e "│  ${CYAN}JAR Location:${NC}    $MCP_APPS_DIR/$JAR_NAME"
     echo -e "│  ${CYAN}Config File:${NC}     $MCP_CONFIG_FILE"
+    echo -e "│  ${CYAN}Data Directory:${NC}  $MCP_APPS_DIR/data"
     echo -e "│  ${CYAN}Version:${NC}         $STABLE_TAG"
     echo -e "│                                                                │"
     echo -e "╰────────────────────────────────────────────────────────────────╯"

@@ -5,9 +5,12 @@ import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.domain.LogGroupSummary;
 import co.fanki.datadog.traceinspector.domain.LogQuery;
 import co.fanki.datadog.traceinspector.domain.LogSummary;
+import co.fanki.datadog.traceinspector.domain.StackTraceFilter;
+import co.fanki.datadog.traceinspector.domain.StackTraceFilter.StackTraceDetail;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -116,6 +119,24 @@ public final class LogSearchTool implements McpTool {
                 "description", "Max message length (only for 'full' mode)"
         ));
 
+        properties.put("relevantPackages", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string"),
+                "description", "Package prefixes to keep in stack traces "
+                        + "(e.g., ['co.fanki', 'com.mycompany']). "
+                        + "If empty, no filtering is applied."
+        ));
+
+        properties.put("stackTraceDetail", Map.of(
+                "type", "string",
+                "default", "full",
+                "enum", List.of("full", "relevant", "minimal"),
+                "description", "Stack trace detail level: "
+                        + "'full' returns complete stack trace, "
+                        + "'relevant' filters to specified packages only, "
+                        + "'minimal' shows only exception message and root cause"
+        ));
+
         schema.put("properties", properties);
         schema.put("required", List.of("service", "from", "to"));
 
@@ -136,14 +157,23 @@ public final class LogSearchTool implements McpTool {
             final int limit = getOptionalInt(arguments, "limit", 100);
             final String outputMode = getOptionalString(arguments, "outputMode", "full");
             final int maxMessageLength = getOptionalInt(arguments, "maxMessageLength", 500);
+            final List<String> relevantPackages = getOptionalStringList(
+                    arguments, "relevantPackages", Collections.emptyList()
+            );
+            final StackTraceDetail stackTraceDetail = parseStackTraceDetail(
+                    getOptionalString(arguments, "stackTraceDetail", "full")
+            );
 
             final LogQuery logQuery = new LogQuery(service, env, from, to, query, level, limit);
             final List<LogSummary> logs = datadogClient.searchLogs(logQuery);
 
+            // Create filter if relevant packages are specified
+            final StackTraceFilter filter = new StackTraceFilter(relevantPackages);
+
             if ("summarize".equalsIgnoreCase(outputMode)) {
                 return buildSummarizedResponse(logs);
             }
-            return buildSuccessResponse(logs, maxMessageLength);
+            return buildSuccessResponse(logs, maxMessageLength, filter, stackTraceDetail);
         } catch (final IllegalArgumentException e) {
             throw new McpToolException(TOOL_NAME, "Invalid arguments: " + e.getMessage(), e);
         } catch (final Exception e) {
@@ -153,7 +183,9 @@ public final class LogSearchTool implements McpTool {
 
     private Map<String, Object> buildSuccessResponse(
             final List<LogSummary> logs,
-            final int maxMessageLength
+            final int maxMessageLength,
+            final StackTraceFilter filter,
+            final StackTraceDetail detail
     ) {
         final List<Map<String, Object>> logList = new ArrayList<>();
 
@@ -162,7 +194,9 @@ public final class LogSearchTool implements McpTool {
             logMap.put("timestamp", log.formattedTimestamp());
             logMap.put("level", log.level());
             logMap.put("service", log.service());
-            logMap.put("message", log.truncatedMessage(maxMessageLength));
+            // Filter stack traces in message if present
+            final String filteredMessage = filter.filter(log.message(), detail);
+            logMap.put("message", truncateMessage(filteredMessage, maxMessageLength));
             logMap.put("host", log.host());
             if (log.hasTrace()) {
                 logMap.put("traceId", log.traceId());
@@ -175,6 +209,13 @@ public final class LogSearchTool implements McpTool {
                 "count", logs.size(),
                 "logs", logList
         );
+    }
+
+    private String truncateMessage(final String message, final int maxLength) {
+        if (message == null || message.length() <= maxLength) {
+            return message;
+        }
+        return message.substring(0, maxLength - 3) + "...";
     }
 
     private Map<String, Object> buildSummarizedResponse(final List<LogSummary> logs) {
@@ -303,5 +344,39 @@ public final class LogSearchTool implements McpTool {
                     "Invalid timestamp format. Expected ISO-8601: " + timestamp
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> getOptionalStringList(
+            final Map<String, Object> args,
+            final String key,
+            final List<String> defaultValue
+    ) {
+        final Object value = args.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof List<?> list) {
+            final List<String> result = new ArrayList<>();
+            for (final Object item : list) {
+                if (item != null) {
+                    result.add(item.toString());
+                }
+            }
+            return result;
+        }
+        // If it's a single string, treat it as a single-item list
+        return List.of(value.toString());
+    }
+
+    private StackTraceDetail parseStackTraceDetail(final String value) {
+        if (value == null) {
+            return StackTraceDetail.FULL;
+        }
+        return switch (value.toLowerCase()) {
+            case "relevant" -> StackTraceDetail.RELEVANT;
+            case "minimal" -> StackTraceDetail.MINIMAL;
+            default -> StackTraceDetail.FULL;
+        };
     }
 }

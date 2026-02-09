@@ -3,6 +3,8 @@ package co.fanki.datadog.traceinspector.mcp;
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.domain.ServiceErrorView;
+import co.fanki.datadog.traceinspector.domain.StackTraceFilter;
+import co.fanki.datadog.traceinspector.domain.StackTraceFilter.StackTraceDetail;
 import co.fanki.datadog.traceinspector.domain.TraceDetail;
 import co.fanki.datadog.traceinspector.domain.TraceQuery;
 
@@ -10,6 +12,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,6 +103,24 @@ public final class LogCorrelateTool implements McpTool {
                 "description", "Include trace summary in the response"
         ));
 
+        properties.put("relevantPackages", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string"),
+                "description", "Package prefixes to keep in stack traces "
+                        + "(e.g., ['co.fanki', 'com.mycompany']). "
+                        + "If empty, no filtering is applied."
+        ));
+
+        properties.put("stackTraceDetail", Map.of(
+                "type", "string",
+                "default", "full",
+                "enum", List.of("full", "relevant", "minimal"),
+                "description", "Stack trace detail level: "
+                        + "'full' returns complete stack trace, "
+                        + "'relevant' filters to specified packages only, "
+                        + "'minimal' shows only exception message and root cause"
+        ));
+
         schema.put("properties", properties);
         schema.put("required", List.of("traceId", "service", "from", "to"));
 
@@ -117,8 +138,17 @@ public final class LogCorrelateTool implements McpTool {
             final Instant from = parseTimestamp(getRequiredString(arguments, "from"));
             final Instant to = parseTimestamp(getRequiredString(arguments, "to"));
             final boolean includeTrace = getOptionalBoolean(arguments, "includeTrace", true);
+            final List<String> relevantPackages = getOptionalStringList(
+                    arguments, "relevantPackages", Collections.emptyList()
+            );
+            final StackTraceDetail stackTraceDetail = parseStackTraceDetail(
+                    getOptionalString(arguments, "stackTraceDetail", "full")
+            );
 
             final TraceQuery query = TraceQuery.withDefaultLimit(service, env, from, to);
+
+            // Create filter for stack traces
+            final StackTraceFilter filter = new StackTraceFilter(relevantPackages);
 
             final Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", true);
@@ -136,7 +166,7 @@ public final class LogCorrelateTool implements McpTool {
             final List<ServiceErrorView.LogEntry> logs =
                     datadogClient.searchLogsForTrace(traceId, query);
 
-            result.put("logs", buildLogList(logs));
+            result.put("logs", buildLogList(logs, filter, stackTraceDetail));
             result.put("logCount", logs.size());
 
             return result;
@@ -168,10 +198,15 @@ public final class LogCorrelateTool implements McpTool {
      * Builds the log list for the response.
      *
      * @param logs the log entries
+     * @param filter the stack trace filter
+     * @param detail the stack trace detail level
+     *
      * @return a list of log maps
      */
     private List<Map<String, Object>> buildLogList(
-            final List<ServiceErrorView.LogEntry> logs
+            final List<ServiceErrorView.LogEntry> logs,
+            final StackTraceFilter filter,
+            final StackTraceDetail detail
     ) {
         final List<Map<String, Object>> logList = new ArrayList<>();
         for (final ServiceErrorView.LogEntry log : logs) {
@@ -180,7 +215,10 @@ public final class LogCorrelateTool implements McpTool {
             logMap.put("level", log.level());
             logMap.put("message", log.message());
             if (!log.attributes().isEmpty()) {
-                logMap.put("attributes", log.attributes());
+                // Filter stack traces in attributes
+                final Map<String, String> filteredAttributes =
+                        filter.filterAttributes(log.attributes(), detail);
+                logMap.put("attributes", filteredAttributes);
             }
             logList.add(logMap);
         }
@@ -233,5 +271,39 @@ public final class LogCorrelateTool implements McpTool {
                     "Invalid timestamp format. Expected ISO-8601: " + timestamp
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> getOptionalStringList(
+            final Map<String, Object> args,
+            final String key,
+            final List<String> defaultValue
+    ) {
+        final Object value = args.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof List<?> list) {
+            final List<String> result = new ArrayList<>();
+            for (final Object item : list) {
+                if (item != null) {
+                    result.add(item.toString());
+                }
+            }
+            return result;
+        }
+        // If it's a single string, treat it as a single-item list
+        return List.of(value.toString());
+    }
+
+    private StackTraceDetail parseStackTraceDetail(final String value) {
+        if (value == null) {
+            return StackTraceDetail.FULL;
+        }
+        return switch (value.toLowerCase()) {
+            case "relevant" -> StackTraceDetail.RELEVANT;
+            case "minimal" -> StackTraceDetail.MINIMAL;
+            default -> StackTraceDetail.FULL;
+        };
     }
 }
