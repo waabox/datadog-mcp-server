@@ -2,6 +2,7 @@ package co.fanki.datadog.traceinspector;
 
 import co.fanki.datadog.traceinspector.application.MarkdownWorkflowGenerator;
 import co.fanki.datadog.traceinspector.application.TraceDiagnosticService;
+import co.fanki.datadog.traceinspector.application.TraceScenarioExtractor;
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.datadog.DatadogClientImpl;
@@ -9,6 +10,7 @@ import co.fanki.datadog.traceinspector.mcp.LogCorrelateTool;
 import co.fanki.datadog.traceinspector.mcp.LogSearchTool;
 import co.fanki.datadog.traceinspector.mcp.McpProtocolHandler;
 import co.fanki.datadog.traceinspector.mcp.McpTool;
+import co.fanki.datadog.traceinspector.mcp.TraceExtractScenarioTool;
 import co.fanki.datadog.traceinspector.mcp.TraceInspectErrorTraceTool;
 import co.fanki.datadog.traceinspector.mcp.TraceListErrorTracesTool;
 
@@ -106,13 +108,16 @@ public final class DatadogMcpServer {
                     new MarkdownWorkflowGenerator();
             final TraceDiagnosticService diagnosticService =
                     new TraceDiagnosticService(datadogClient, workflowGenerator);
+            final TraceScenarioExtractor scenarioExtractor =
+                    new TraceScenarioExtractor();
 
             // Create tools
             final List<McpTool> tools = List.of(
                     new TraceListErrorTracesTool(diagnosticService, config),
                     new TraceInspectErrorTraceTool(diagnosticService, config),
                     new LogSearchTool(datadogClient, config),
-                    new LogCorrelateTool(datadogClient, config)
+                    new LogCorrelateTool(datadogClient, config),
+                    new TraceExtractScenarioTool(datadogClient, scenarioExtractor, config)
             );
 
             // Create protocol handler

@@ -35,6 +35,7 @@ The installer will:
 |------|-------------|
 | `trace.list_error_traces` | List error traces for a service within a time window |
 | `trace.inspect_error_trace` | Deep-dive into a specific trace with spans, logs, and diagnostic workflow |
+| `trace.extract_scenario` | Extract structured test scenario from a trace for debugging and unit test generation |
 | `log.search_logs` | Search logs with filters and optional pattern summarization |
 | `log.correlate` | Correlate logs with a specific trace ID |
 
@@ -151,7 +152,156 @@ Get detailed diagnostic information about a specific trace, including all spans,
 
 ---
 
-### 3. Search Logs (`log.search_logs`)
+### 3. Extract Test Scenario (`trace.extract_scenario`)
+
+Extract a structured test scenario from a trace for debugging and unit test generation. This tool analyzes the execution flow and identifies the exact location in the code where the error occurred.
+
+**Natural Language Prompts:**
+
+```
+"Extract the scenario from trace abc123 in order-service"
+
+"Analyze trace xyz789 and help me create a unit test"
+
+"Show me the execution flow and error location for trace def456"
+
+"What's the test scenario for this failing trace?"
+```
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `traceId` | Yes | - | The trace ID to analyze |
+| `service` | Yes | - | Service name in Datadog |
+| `from` | Yes | - | ISO-8601 start timestamp |
+| `to` | Yes | - | ISO-8601 end timestamp |
+| `env` | No | `prod` | Environment |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "traceId": "abc123def456789",
+  "entryPoint": {
+    "method": "POST",
+    "path": "/api/orders",
+    "body": "{\"product_id\": \"123\", \"quantity\": 5}"
+  },
+  "executionFlow": [
+    {
+      "order": 1,
+      "spanId": "span1",
+      "service": "api-gateway",
+      "operation": "POST /api/orders",
+      "type": "http",
+      "durationMs": 1240
+    },
+    {
+      "order": 2,
+      "spanId": "span2",
+      "parentSpanId": "span1",
+      "service": "order-service",
+      "operation": "OrderController.createOrder",
+      "type": "internal",
+      "durationMs": 1100
+    },
+    {
+      "order": 3,
+      "spanId": "span3",
+      "parentSpanId": "span2",
+      "service": "order-service",
+      "operation": "SELECT * FROM products WHERE id = ?",
+      "type": "db",
+      "durationMs": 45
+    },
+    {
+      "order": 4,
+      "spanId": "span4",
+      "parentSpanId": "span2",
+      "service": "order-service",
+      "operation": "OrderService.validateStock",
+      "type": "internal",
+      "durationMs": 12,
+      "isError": true
+    }
+  ],
+  "errorContext": {
+    "service": "order-service",
+    "operation": "OrderService.validateStock",
+    "exceptionType": "InsufficientStockException",
+    "message": "Not enough stock: requested 5, available 2",
+    "location": {
+      "className": "com.example.order.OrderService",
+      "methodName": "validateStock",
+      "fileName": "OrderService.java",
+      "lineNumber": 142
+    },
+    "spanTags": {
+      "product_id": "123",
+      "quantity": "5"
+    }
+  },
+  "relevantData": {
+    "product_id": "123",
+    "quantity": "5",
+    "user_id": "456"
+  },
+  "suggestedTestScenario": {
+    "given": "Data: product_id=123, quantity=5",
+    "when": "Request: POST /api/orders with body",
+    "then": "InsufficientStockException is thrown with message 'Not enough stock: requested 5, available 2'"
+  },
+  "involvedServices": ["api-gateway", "order-service"],
+  "stepCount": 4,
+  "totalDurationMs": 1240
+}
+```
+
+**Workflow: From Trace to Unit Test**
+
+```
+1. User: "Extract scenario from trace abc123 in order-service"
+
+2. Claude analyzes the trace and responds:
+   "Based on the trace, here's what happened:
+
+   Entry Point: POST /api/orders with body {"product_id": "123", "quantity": 5}
+
+   Execution Flow:
+   1. api-gateway → POST /api/orders (1240ms)
+   2. order-service → OrderController.createOrder (1100ms)
+   3. order-service → SELECT * FROM products WHERE id = ? (45ms)
+   4. order-service → OrderService.validateStock ❌ (12ms)
+
+   Error: InsufficientStockException at OrderService.java:142
+   Message: 'Not enough stock: requested 5, available 2'
+
+   Where is the order-service codebase? I can look at the code and suggest a unit test."
+
+3. User provides codebase path
+
+4. Claude reads the code and proposes:
+   "@Test
+   void whenValidatingStock_givenQuantityExceedsAvailable_shouldThrowException() {
+       // Given
+       Product product = new Product("123", "Test Product", 2);
+       OrderRequest request = new OrderRequest("123", 5);
+
+       // When / Then
+       InsufficientStockException ex = assertThrows(
+           InsufficientStockException.class,
+           () -> orderService.validateStock(request, product)
+       );
+
+       assertEquals("Not enough stock: requested 5, available 2", ex.getMessage());
+   }"
+```
+
+---
+
+### 4. Search Logs (`log.search_logs`)
 
 Search for logs with various filters and optional pattern summarization.
 
@@ -230,7 +380,7 @@ Search for logs with various filters and optional pattern summarization.
 
 ---
 
-### 4. Correlate Logs with Traces (`log.correlate`)
+### 5. Correlate Logs with Traces (`log.correlate`)
 
 Find all logs associated with a specific trace ID and optionally include trace details.
 
