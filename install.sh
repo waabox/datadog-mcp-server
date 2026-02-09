@@ -17,6 +17,7 @@ NC='\033[0m' # No Color
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
 STABLE_TAG="v1.3.2"
 JAR_NAME="datadog-mcp-server-1.3.2.jar"
+JAR_DOWNLOAD_URL="$REPO_URL/releases/download/$STABLE_TAG/$JAR_NAME"
 
 # Pirate banner
 echo ""
@@ -72,33 +73,12 @@ check_requirements() {
     fi
     echo -e "${GREEN}✓ Java $JAVA_VERSION found${NC}"
 
-    # Check for Maven
-    if ! command -v mvn &> /dev/null; then
-        echo -e "${RED}✗ Shiver me timbers! Maven be missing!${NC}"
-        echo "  Install Maven 3.8+ and try again."
-        echo "  https://maven.apache.org/install.html"
-        exit 1
-    fi
-    echo -e "${GREEN}✓ Maven found${NC}"
-
     # Check for curl
     if ! command -v curl &> /dev/null; then
         echo -e "${RED}✗ Curl be missing from yer arsenal!${NC}"
         exit 1
     fi
     echo -e "${GREEN}✓ curl found${NC}"
-
-    # Check for git or tar
-    if ! command -v git &> /dev/null && ! command -v tar &> /dev/null; then
-        echo -e "${RED}✗ Neither git nor tar be available!${NC}"
-        exit 1
-    fi
-
-    if command -v git &> /dev/null; then
-        echo -e "${GREEN}✓ git found${NC}"
-    else
-        echo -e "${GREEN}✓ tar found (will download archive)${NC}"
-    fi
 
     echo ""
 }
@@ -117,12 +97,10 @@ setup_paths() {
         CLAUDE_CONFIG_DIR="$HOME/.claude"
         MCP_APPS_DIR="$HOME/.claude/apps/mcp"
         MCP_CONFIG_FILE="$HOME/.claude.json"
-        TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     elif [ "$MACHINE" = "Windows" ]; then
         CLAUDE_CONFIG_DIR="$APPDATA/claude"
         MCP_APPS_DIR="$APPDATA/claude/apps/mcp"
         MCP_CONFIG_FILE="$APPDATA/.claude.json"
-        TEMP_BUILD_DIR="/tmp/datadog-mcp-build-$$"
     else
         echo -e "${RED}Blimey! I don't recognize this operating system: $MACHINE${NC}"
         exit 1
@@ -157,68 +135,30 @@ check_existing_config() {
         echo -e "🔍 ${GREEN}Found existing waabox-datadog-mcp configuration!${NC}"
         echo -e "   Config file: ${CYAN}$MCP_CONFIG_FILE${NC}"
         echo ""
-        echo -e "   ${YELLOW}Upgrade mode:${NC} Will only build and update the JAR file."
+        echo -e "   ${YELLOW}Upgrade mode:${NC} Will only download and update the JAR file."
         echo -e "   Your existing credentials and settings will be preserved."
         echo ""
     fi
 }
 
-# Download and build
-download_and_build() {
-    echo -e "📥 Downloadin' the treasure from ${CYAN}$REPO_URL${NC} (tag: ${YELLOW}$STABLE_TAG${NC})..."
+# Download JAR from GitHub release
+download_jar() {
+    echo -e "📥 Downloadin' the treasure from GitHub release ${YELLOW}$STABLE_TAG${NC}..."
+    echo -e "   ${CYAN}$JAR_DOWNLOAD_URL${NC}"
     echo ""
 
-    # Create temp directory in /tmp
-    mkdir -p "$TEMP_BUILD_DIR"
-    cd "$TEMP_BUILD_DIR"
-
-    if command -v git &> /dev/null; then
-        # Use git clone with specific tag
-        git clone --depth 1 --branch "$STABLE_TAG" "$REPO_URL.git" datadog-mcp-server 2>&1 | while read line; do
-            echo -e "   ${BLUE}git:${NC} $line"
-        done
-        cd datadog-mcp-server
-    else
-        # Fallback to downloading tarball
-        echo -e "   Downloadin' archive..."
-        curl -fsSL "$REPO_URL/archive/refs/tags/$STABLE_TAG.tar.gz" -o source.tar.gz
-        tar -xzf source.tar.gz
-        cd datadog-mcp-server-*
-    fi
-
-    echo ""
-    echo -e "🔨 Buildin' the treasure (this might take a minute)..."
-    echo ""
-
-    # Build without tests
-    mvn clean package -DskipTests -q
-
-    if [ ! -f "target/$JAR_NAME" ]; then
-        echo -e "${RED}✗ Build failed! The JAR file was not created.${NC}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}✓ Build successful!${NC}"
-    echo ""
-
-    # Set JAR source path
-    JAR_SOURCE="$(pwd)/target/$JAR_NAME"
-}
-
-# Install JAR
-install_jar() {
-    echo -e "📁 Creatin' the hideout at ${CYAN}$MCP_APPS_DIR${NC}..."
+    # Create destination directory
     mkdir -p "$MCP_APPS_DIR"
 
-    echo -e "📦 Copyin' the treasure to its final restin' place..."
-    cp "$JAR_SOURCE" "$MCP_APPS_DIR/$JAR_NAME"
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ JAR installed at $MCP_APPS_DIR/$JAR_NAME${NC}"
+    # Download JAR directly to destination
+    if curl -fsSL "$JAR_DOWNLOAD_URL" -o "$MCP_APPS_DIR/$JAR_NAME"; then
+        echo -e "${GREEN}✓ Downloaded $JAR_NAME${NC}"
     else
-        echo -e "${RED}✗ Failed to copy JAR file${NC}"
+        echo -e "${RED}✗ Failed to download JAR from GitHub release${NC}"
+        echo -e "   URL: $JAR_DOWNLOAD_URL"
         exit 1
     fi
+
     echo ""
 }
 
@@ -351,6 +291,7 @@ configure_claude() {
 }
 
 write_new_config() {
+    JAR_PATH="$MCP_APPS_DIR/$JAR_NAME"
     cat > "$MCP_CONFIG_FILE" << EOF
 {
   "mcpServers": {
@@ -367,14 +308,6 @@ write_new_config() {
 }
 EOF
     echo -e "${GREEN}✓ Created .claude.json configuration${NC}"
-}
-
-# Cleanup
-cleanup() {
-    if [ -n "$TEMP_BUILD_DIR" ] && [ -d "$TEMP_BUILD_DIR" ]; then
-        echo -e "🧹 Cleanin' up temporary files..."
-        rm -rf "$TEMP_BUILD_DIR"
-    fi
 }
 
 # Show completion message
@@ -424,8 +357,7 @@ main() {
     check_requirements
     setup_paths
     check_existing_config
-    download_and_build
-    install_jar
+    download_jar
 
     if [ "$ALREADY_CONFIGURED" = true ]; then
         # Skip credentials and config - just update JAR
@@ -436,12 +368,8 @@ main() {
         configure_claude
     fi
 
-    cleanup
     show_completion
 }
-
-# Trap to cleanup on error
-trap cleanup EXIT
 
 # Run main
 main
