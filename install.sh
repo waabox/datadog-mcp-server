@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
-STABLE_TAG="v1.2.0"
-JAR_NAME="datadog-mcp-server-1.2.0.jar"
+STABLE_TAG="v1.3.0"
+JAR_NAME="datadog-mcp-server-1.3.0.jar"
 
 # Pirate banner
 echo ""
