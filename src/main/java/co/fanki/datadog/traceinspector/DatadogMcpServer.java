@@ -5,6 +5,7 @@ import co.fanki.datadog.traceinspector.application.TraceDiagnosticService;
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.datadog.DatadogClientImpl;
+import co.fanki.datadog.traceinspector.mcp.LogCorrelateTool;
 import co.fanki.datadog.traceinspector.mcp.LogSearchTool;
 import co.fanki.datadog.traceinspector.mcp.McpProtocolHandler;
 import co.fanki.datadog.traceinspector.mcp.McpTool;
@@ -110,7 +111,8 @@ public final class DatadogMcpServer {
             final List<McpTool> tools = List.of(
                     new TraceListErrorTracesTool(diagnosticService, config),
                     new TraceInspectErrorTraceTool(diagnosticService, config),
-                    new LogSearchTool(datadogClient, config)
+                    new LogSearchTool(datadogClient, config),
+                    new LogCorrelateTool(datadogClient, config)
             );
 
             // Create protocol handler

@@ -7,7 +7,7 @@
 ![MCP Server](https://img.shields.io/badge/MCP-server-black)
 ![Datadog APM](https://img.shields.io/badge/Datadog-APM%20traces-purple)
 
-An MCP (Model Context Protocol) server that lets AI assistants like Claude query Datadog APM for error traces and generate actionable debugging workflows.
+An MCP (Model Context Protocol) server that lets AI assistants like Claude query Datadog APM for error traces, search logs, and generate actionable debugging workflows.
 
 ---
 
@@ -21,21 +21,315 @@ curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/inst
 
 The installer will:
 
-1. Download the latest stable version from git  
-2. Build the project (skips tests for speed)  
-3. Copy the JAR to `~/.claude/apps/mcp/`  
-4. Configure Claude Code's `mcp.json`  
-5. Ask for your Datadog API keys (optional)  
+1. Download the latest stable version from git
+2. Build the project (skips tests for speed)
+3. Copy the JAR to `~/.claude/apps/mcp/`
+4. Configure Claude Code's `mcp.json`
+5. Ask for your Datadog API keys (optional)
 
 ---
 
-## What Does This Server Do?
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `trace.list_error_traces` | List error traces for a service within a time window |
+| `trace.inspect_error_trace` | Deep-dive into a specific trace with spans, logs, and diagnostic workflow |
+| `log.search_logs` | Search logs with filters and optional pattern summarization |
+| `log.correlate` | Correlate logs with a specific trace ID |
+
+---
+
+## Usage Examples
 
 ### 1. List Error Traces (`trace.list_error_traces`)
-Search Datadog APM for traces matching filters.
+
+Search for error traces in a specific service.
+
+**Natural Language Prompts:**
+
+```
+"List error traces for payment-service from the last hour"
+
+"Show me the last 10 errors in order-service today"
+
+"Find errors in api-gateway between 2pm and 3pm in staging environment"
+
+"What errors occurred in user-service yesterday?"
+```
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `service` | Yes | - | Service name in Datadog |
+| `from` | Yes | - | ISO-8601 start timestamp |
+| `to` | Yes | - | ISO-8601 end timestamp |
+| `env` | No | `prod` | Environment (prod, staging, dev) |
+| `limit` | No | `20` | Maximum traces to return (max 100) |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "count": 3,
+  "traces": [
+    {
+      "traceId": "abc123def456789",
+      "service": "payment-service",
+      "resourceName": "POST /api/v1/payments",
+      "errorMessage": "Connection timeout to payment gateway",
+      "timestamp": "2024-01-15T14:32:15Z",
+      "duration": "2.45s"
+    }
+  ]
+}
+```
+
+---
 
 ### 2. Inspect Error Trace (`trace.inspect_error_trace`)
-Deep-dive into spans, logs, stack traces, and generate a full diagnostic markdown.
+
+Get detailed diagnostic information about a specific trace, including all spans, logs, and an actionable debugging workflow.
+
+**Natural Language Prompts:**
+
+```
+"Inspect trace abc123def456789 in payment-service"
+
+"Analyze the error trace xyz789 and help me debug it"
+
+"Show me the full details of trace abc123 from order-service in the last hour"
+
+"Generate a diagnostic workflow for trace def456 in checkout-service"
+```
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `traceId` | Yes | - | The trace ID to inspect |
+| `service` | Yes | - | Service name in Datadog |
+| `from` | Yes | - | ISO-8601 start timestamp |
+| `to` | Yes | - | ISO-8601 end timestamp |
+| `env` | No | `prod` | Environment |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "traceId": "abc123def456789",
+  "service": "payment-service",
+  "involvedServices": ["api-gateway", "payment-service", "fraud-detection", "notification-service"],
+  "totalErrors": 2,
+  "isDistributedError": true,
+  "traceSummary": {
+    "duration": "1.24s",
+    "spanCount": 28,
+    "errorSpanCount": 2,
+    "startTime": "2024-01-15T14:32:15Z"
+  },
+  "serviceErrors": [
+    {
+      "serviceName": "payment-service",
+      "errorCount": 1,
+      "primaryError": "PaymentGatewayException: Connection refused",
+      "errorTypes": ["PaymentGatewayException"]
+    },
+    {
+      "serviceName": "fraud-detection",
+      "errorCount": 1,
+      "primaryError": "TimeoutException: Request timed out after 5000ms",
+      "errorTypes": ["TimeoutException"]
+    }
+  ],
+  "workflow": "# Diagnostic Workflow\n\n## Error Summary\n..."
+}
+```
+
+---
+
+### 3. Search Logs (`log.search_logs`)
+
+Search for logs with various filters and optional pattern summarization.
+
+**Natural Language Prompts:**
+
+```
+"Search ERROR logs in payment-service from the last hour"
+
+"Find all logs mentioning 'timeout' in order-service today"
+
+"Show me WARNING and ERROR logs in api-gateway between 2pm and 4pm"
+
+"Summarize the log patterns in notification-service from yesterday"
+
+"Search logs with query 'user_id:12345' in user-service"
+```
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `service` | Yes | - | Service name in Datadog |
+| `from` | Yes | - | ISO-8601 start timestamp |
+| `to` | Yes | - | ISO-8601 end timestamp |
+| `env` | No | `prod` | Environment |
+| `level` | No | - | Log level filter (ERROR, WARN, INFO, DEBUG) |
+| `query` | No | - | Additional Datadog query string |
+| `limit` | No | `100` | Maximum logs to return |
+| `outputMode` | No | `full` | `full` returns all logs, `summarize` groups by pattern |
+| `maxMessageLength` | No | `500` | Max message length in full mode |
+
+**Example Response (full mode):**
+
+```json
+{
+  "success": true,
+  "count": 45,
+  "logs": [
+    {
+      "timestamp": "2024-01-15T14:32:15Z",
+      "level": "ERROR",
+      "service": "payment-service",
+      "message": "Failed to process payment: Connection timeout to gateway.example.com",
+      "host": "prod-payment-01",
+      "traceId": "abc123def456789"
+    }
+  ]
+}
+```
+
+**Example Response (summarize mode):**
+
+```json
+{
+  "success": true,
+  "totalLogs": 150,
+  "uniquePatterns": 8,
+  "groups": [
+    {
+      "pattern": "Failed to process payment: Connection timeout to *",
+      "level": "ERROR",
+      "count": 45,
+      "firstOccurrence": "2024-01-15T14:00:00Z",
+      "lastOccurrence": "2024-01-15T14:45:00Z"
+    },
+    {
+      "pattern": "Request completed successfully in * ms",
+      "level": "INFO",
+      "count": 89,
+      "firstOccurrence": "2024-01-15T14:00:00Z",
+      "lastOccurrence": "2024-01-15T14:59:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### 4. Correlate Logs with Traces (`log.correlate`)
+
+Find all logs associated with a specific trace ID and optionally include trace details.
+
+**Natural Language Prompts:**
+
+```
+"Correlate logs for trace abc123 in payment-service"
+
+"Show me all logs related to trace xyz789 from the last hour"
+
+"Get trace details and associated logs for trace def456 in order-service"
+
+"Find logs for trace abc123 without trace details"
+```
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `traceId` | Yes | - | The trace ID to search for |
+| `service` | Yes | - | Service name in Datadog |
+| `from` | Yes | - | ISO-8601 start timestamp |
+| `to` | Yes | - | ISO-8601 end timestamp |
+| `env` | No | `prod` | Environment |
+| `includeTrace` | No | `true` | Include trace summary in response |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "traceId": "abc123def456789",
+  "trace": {
+    "service": "payment-service",
+    "resourceName": "POST /api/v1/payments",
+    "duration": "542.00ms",
+    "spanCount": 12,
+    "services": ["api-gateway", "payment-service", "database-service"],
+    "hasErrors": true
+  },
+  "logs": [
+    {
+      "timestamp": "2024-01-15T14:32:15.123Z",
+      "level": "INFO",
+      "message": "Processing payment request for order #12345"
+    },
+    {
+      "timestamp": "2024-01-15T14:32:15.456Z",
+      "level": "ERROR",
+      "message": "Payment gateway returned error: insufficient_funds",
+      "attributes": {
+        "order_id": "12345",
+        "amount": "99.99"
+      }
+    }
+  ],
+  "logCount": 2
+}
+```
+
+---
+
+## Common Workflows
+
+### Debugging a Production Incident
+
+```
+1. "List error traces for payment-service from the last 30 minutes"
+   → Identifies recent errors and their trace IDs
+
+2. "Inspect trace abc123 in payment-service from the last hour"
+   → Gets full diagnostic with spans, logs, and workflow
+
+3. "Correlate logs for trace abc123 in payment-service"
+   → Shows all logs associated with this specific request
+```
+
+### Investigating Intermittent Errors
+
+```
+1. "Search ERROR logs in order-service from today, summarize patterns"
+   → Groups similar errors to identify patterns
+
+2. "List error traces for order-service from the last 6 hours with limit 50"
+   → Gets more traces to analyze the pattern
+
+3. "Inspect trace xyz789 in order-service"
+   → Deep dive into a specific occurrence
+```
+
+### Cross-Service Error Analysis
+
+```
+1. "Inspect trace abc123 in api-gateway from the last hour"
+   → Shows all services involved in the distributed trace
+
+2. "Search ERROR logs in downstream-service with query 'trace_id:abc123'"
+   → Finds related errors in downstream services
+```
 
 ---
 
@@ -101,7 +395,7 @@ mvn clean package
 The JAR appears in:
 
 ```
-target/datadog-mcp-server-1.0.0-SNAPSHOT.jar
+target/datadog-mcp-server-1.1.0.jar
 ```
 
 ---
@@ -144,4 +438,4 @@ Replace `YOUR_USER` with your username and update the keys with your actual Data
 
 ## License
 
-MIT License  
+MIT License
