@@ -10,6 +10,22 @@
 An MCP (Model Context Protocol) server that lets AI assistants like Claude query Datadog APM for error traces, search logs, and generate actionable debugging workflows.
 
 ---
+## Why This MCP Is Unique
+
+### Enhanced Log Summarizer
+- Groups similar logs → **1 compact entry**  
+- Uses advanced pattern normalization:
+  - `<UUID>`, `<TS>`, `<IP>`, `<HEX>`, `<ID>`
+- Adds **temporal metadata** (`firstOccurrence`, `lastOccurrence`)
+- Executes server‑side → fewer tokens, more context for LLMs
+
+### Trace Analyzer for AI Reasoning
+- Generates **actionable diagnostic workflows**
+- Aggregates errors per service (`ServiceErrorView`)
+- Auto-correlates logs + traces
+- Extracts executable **test scenarios**
+- Parses stack traces into actionable structures
+- Detects **distributed errors** automatically
 
 ## Quick Install
 
