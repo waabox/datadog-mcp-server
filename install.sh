@@ -147,9 +147,8 @@ download_jar() {
     echo -e "   ${CYAN}$JAR_DOWNLOAD_URL${NC}"
     echo ""
 
-    # Create destination directory and data directory for config persistence
+    # Create destination directory
     mkdir -p "$MCP_APPS_DIR"
-    mkdir -p "$MCP_APPS_DIR/data"
 
     # Clean up old versions of the JAR
     cleanup_old_versions
@@ -347,7 +346,7 @@ show_completion() {
     echo -e "│                                                                │"
     echo -e "│  ${CYAN}JAR Location:${NC}    $MCP_APPS_DIR/$JAR_NAME"
     echo -e "│  ${CYAN}Config File:${NC}     $MCP_CONFIG_FILE"
-    echo -e "│  ${CYAN}Data Directory:${NC}  $MCP_APPS_DIR/data"
+    echo -e "│  ${CYAN}Data Directory:${NC}  ~/.claude/mcp/waabox-mcp-server/"
     echo -e "│  ${CYAN}Version:${NC}         $STABLE_TAG"
     echo -e "│                                                                │"
     echo -e "╰────────────────────────────────────────────────────────────────╯"

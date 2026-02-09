@@ -4,6 +4,7 @@ import co.fanki.datadog.traceinspector.application.MarkdownWorkflowGenerator;
 import co.fanki.datadog.traceinspector.application.TraceDiagnosticService;
 import co.fanki.datadog.traceinspector.application.TraceScenarioExtractor;
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
+import co.fanki.datadog.traceinspector.config.FilterConfigStore;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.datadog.DatadogClientImpl;
 import co.fanki.datadog.traceinspector.mcp.LogCorrelateTool;
@@ -110,13 +111,14 @@ public final class DatadogMcpServer {
                     new TraceDiagnosticService(datadogClient, workflowGenerator);
             final TraceScenarioExtractor scenarioExtractor =
                     new TraceScenarioExtractor();
+            final FilterConfigStore filterConfigStore = new FilterConfigStore();
 
             // Create tools
             final List<McpTool> tools = List.of(
                     new TraceListErrorTracesTool(diagnosticService, config),
                     new TraceInspectErrorTraceTool(diagnosticService, config),
-                    new LogSearchTool(datadogClient, config),
-                    new LogCorrelateTool(datadogClient, config),
+                    new LogSearchTool(datadogClient, config, filterConfigStore),
+                    new LogCorrelateTool(datadogClient, config, filterConfigStore),
                     new TraceExtractScenarioTool(datadogClient, scenarioExtractor, config)
             );
 

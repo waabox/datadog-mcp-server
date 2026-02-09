@@ -1,6 +1,7 @@
 package co.fanki.datadog.traceinspector.mcp;
 
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
+import co.fanki.datadog.traceinspector.config.FilterConfigStore;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.domain.LogQuery;
 import co.fanki.datadog.traceinspector.domain.LogSummary;
@@ -12,7 +13,9 @@ import co.fanki.datadog.traceinspector.domain.TraceSummary;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,15 +35,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LogCorrelateToolTest {
 
+    @TempDir
+    Path tempDir;
+
     private TestDatadogClient datadogClient;
     private DatadogConfig config;
+    private FilterConfigStore filterConfigStore;
     private LogCorrelateTool tool;
 
     @BeforeEach
     void setUp() {
         datadogClient = new TestDatadogClient();
         config = new DatadogConfig("api-key", "app-key", "datadoghq.com", "prod");
-        tool = new LogCorrelateTool(datadogClient, config);
+        filterConfigStore = new FilterConfigStore(tempDir.resolve("filter-config.json"));
+        tool = new LogCorrelateTool(datadogClient, config, filterConfigStore);
     }
 
     @Test
@@ -251,7 +259,7 @@ class LogCorrelateToolTest {
     void whenCreatingTool_givenNullClient_shouldThrowException() {
         assertThrows(
                 NullPointerException.class,
-                () -> new LogCorrelateTool(null, config)
+                () -> new LogCorrelateTool(null, config, filterConfigStore)
         );
     }
 
@@ -259,7 +267,15 @@ class LogCorrelateToolTest {
     void whenCreatingTool_givenNullConfig_shouldThrowException() {
         assertThrows(
                 NullPointerException.class,
-                () -> new LogCorrelateTool(datadogClient, null)
+                () -> new LogCorrelateTool(datadogClient, null, filterConfigStore)
+        );
+    }
+
+    @Test
+    void whenCreatingTool_givenNullFilterConfigStore_shouldThrowException() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new LogCorrelateTool(datadogClient, config, null)
         );
     }
 

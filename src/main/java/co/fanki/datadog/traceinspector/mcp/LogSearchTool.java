@@ -1,6 +1,7 @@
 package co.fanki.datadog.traceinspector.mcp;
 
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
+import co.fanki.datadog.traceinspector.config.FilterConfigStore;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.domain.LogGroupSummary;
 import co.fanki.datadog.traceinspector.domain.LogQuery;
@@ -34,21 +35,27 @@ public final class LogSearchTool implements McpTool {
 
     private final DatadogClient datadogClient;
     private final DatadogConfig config;
+    private final FilterConfigStore filterConfigStore;
 
     /**
      * Creates a new LogSearchTool.
      *
      * @param datadogClient the Datadog client for log operations
      * @param config the Datadog configuration for defaults
+     * @param filterConfigStore the store for filter configuration persistence
      */
     public LogSearchTool(
             final DatadogClient datadogClient,
-            final DatadogConfig config
+            final DatadogConfig config,
+            final FilterConfigStore filterConfigStore
     ) {
         this.datadogClient = Objects.requireNonNull(
                 datadogClient, "datadogClient must not be null"
         );
         this.config = Objects.requireNonNull(config, "config must not be null");
+        this.filterConfigStore = Objects.requireNonNull(
+                filterConfigStore, "filterConfigStore must not be null"
+        );
     }
 
     @Override
@@ -158,7 +165,7 @@ public final class LogSearchTool implements McpTool {
             final String outputMode = getOptionalString(arguments, "outputMode", "full");
             final int maxMessageLength = getOptionalInt(arguments, "maxMessageLength", 500);
             final List<String> relevantPackages = getOptionalStringList(
-                    arguments, "relevantPackages", Collections.emptyList()
+                    arguments, "relevantPackages", filterConfigStore.getRelevantPackages()
             );
             final StackTraceDetail stackTraceDetail = parseStackTraceDetail(
                     getOptionalString(arguments, "stackTraceDetail", "full")
