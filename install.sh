@@ -96,18 +96,18 @@ setup_paths() {
     if [ "$MACHINE" = "Mac" ] || [ "$MACHINE" = "Linux" ]; then
         CLAUDE_CONFIG_DIR="$HOME/.claude"
         MCP_APPS_DIR="$HOME/.claude/apps/mcp"
-        MCP_CONFIG_FILE="$HOME/.claude.json"
+        MCP_CONFIG_FILE="$HOME/.claude/mcp.json"
     elif [ "$MACHINE" = "Windows" ]; then
         CLAUDE_CONFIG_DIR="$APPDATA/claude"
         MCP_APPS_DIR="$APPDATA/claude/apps/mcp"
-        MCP_CONFIG_FILE="$APPDATA/.claude.json"
+        MCP_CONFIG_FILE="$APPDATA/claude/mcp.json"
     else
         echo -e "${RED}Blimey! I don't recognize this operating system: $MACHINE${NC}"
         exit 1
     fi
 }
 
-# Check if waabox-datadog-mcp is already configured in .claude.json
+# Check if waabox-datadog-mcp is already configured in mcp.json
 check_existing_config() {
     ALREADY_CONFIGURED=false
 
@@ -266,7 +266,7 @@ configure_claude() {
     mkdir -p "$CLAUDE_CONFIG_DIR"
 
     if [ -f "$MCP_CONFIG_FILE" ]; then
-        echo -e "${YELLOW}Found existing .claude.json...${NC}"
+        echo -e "${YELLOW}Found existing mcp.json...${NC}"
 
         if command -v jq &> /dev/null; then
             # Use jq to merge - preserves all existing settings and other MCP servers
@@ -278,14 +278,14 @@ configure_claude() {
                --arg site "$DATADOG_SITE" \
                '.mcpServers = (.mcpServers // {}) | .mcpServers["waabox-datadog-mcp"] = {
                    "command": "java",
-                   "args": ["-jar", $jar],
+                   "args": ["--enable-preview", "-jar", $jar],
                    "env": {
                        "DATADOG_API_KEY": $api_key,
                        "DATADOG_APP_KEY": $app_key,
                        "DATADOG_SITE": $site
                    }
                }' "$MCP_CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$MCP_CONFIG_FILE"
-            echo -e "${GREEN}✓ Updated waabox-datadog-mcp in .claude.json (all other settings preserved)${NC}"
+            echo -e "${GREEN}✓ Updated waabox-datadog-mcp in mcp.json (all other MCP servers preserved)${NC}"
         else
             # No jq - need to be careful not to overwrite other settings
             echo -e "${YELLOW}⚠️  jq not found. Cannot safely merge config.${NC}"
@@ -294,7 +294,7 @@ configure_claude() {
             echo ""
             echo -e "${BLUE}   \"waabox-datadog-mcp\": {"
             echo -e "     \"command\": \"java\","
-            echo -e "     \"args\": [\"-jar\", \"$JAR_PATH\"],"
+            echo -e "     \"args\": [\"--enable-preview\", \"-jar\", \"$JAR_PATH\"],"
             echo -e "     \"env\": {"
             echo -e "       \"DATADOG_API_KEY\": \"$DATADOG_API_KEY\","
             echo -e "       \"DATADOG_APP_KEY\": \"$DATADOG_APP_KEY\","
@@ -305,7 +305,7 @@ configure_claude() {
             echo -e "   Or install jq: ${CYAN}brew install jq${NC} (Mac) / ${CYAN}apt install jq${NC} (Linux)"
         fi
     else
-        # No existing config - create new .claude.json with mcpServers
+        # No existing config - create new mcp.json with mcpServers
         write_new_config
     fi
     echo ""
@@ -318,7 +318,7 @@ write_new_config() {
   "mcpServers": {
     "waabox-datadog-mcp": {
       "command": "java",
-      "args": ["-jar", "$JAR_PATH"],
+      "args": ["--enable-preview", "-jar", "$JAR_PATH"],
       "env": {
         "DATADOG_API_KEY": "$DATADOG_API_KEY",
         "DATADOG_APP_KEY": "$DATADOG_APP_KEY",
@@ -328,7 +328,7 @@ write_new_config() {
   }
 }
 EOF
-    echo -e "${GREEN}✓ Created .claude.json configuration${NC}"
+    echo -e "${GREEN}✓ Created mcp.json configuration${NC}"
 }
 
 # Show completion message
