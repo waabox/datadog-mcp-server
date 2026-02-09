@@ -395,7 +395,7 @@ mvn clean package
 The JAR appears in:
 
 ```
-target/datadog-mcp-server-1.1.0.jar
+target/datadog-mcp-server-1.2.0.jar
 ```
 
 ---
