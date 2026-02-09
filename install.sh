@@ -330,6 +330,27 @@ EOF
     echo -e "${GREEN}✓ Created mcp.json configuration${NC}"
 }
 
+# Update only the JAR path in existing config (preserves credentials)
+update_jar_path() {
+    echo -e "⚙️  Updating JAR path in configuration..."
+
+    JAR_PATH="$MCP_APPS_DIR/$JAR_NAME"
+
+    if command -v jq &> /dev/null; then
+        TEMP_FILE=$(mktemp)
+        jq --arg jar "$JAR_PATH" \
+           '.mcpServers["waabox-datadog-mcp"].args = ["--enable-preview", "-jar", $jar]' \
+           "$MCP_CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$MCP_CONFIG_FILE"
+        echo -e "${GREEN}✓ Updated JAR path in $MCP_CONFIG_FILE${NC}"
+    else
+        echo -e "${YELLOW}⚠️  jq not found. Please manually update the JAR path in:${NC}"
+        echo -e "   ${CYAN}$MCP_CONFIG_FILE${NC}"
+        echo ""
+        echo -e "   Change the args to: ${BLUE}[\"--enable-preview\", \"-jar\", \"$JAR_PATH\"]${NC}"
+    fi
+    echo ""
+}
+
 # Show completion message
 show_completion() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -381,8 +402,8 @@ main() {
     download_jar
 
     if [ "$ALREADY_CONFIGURED" = true ]; then
-        # Skip credentials and config - just update JAR
-        echo -e "${GREEN}✓ JAR updated successfully!${NC}"
+        # Upgrade mode - update JAR path but preserve credentials
+        update_jar_path
     else
         # First time install - get credentials and configure
         get_credentials
