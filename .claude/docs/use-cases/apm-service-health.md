@@ -60,7 +60,12 @@ side only). Browser-side Next.js telemetry is RUM, not APM, and is out of scope.
 
 ### Degraded verdict (`service_health`)
 
-The service is `degraded` if **any** of these hold. Each rule that holds adds a human-readable entry
+- BR-11a (minimum traffic): if `baselineHits < 100`, the rules below are not evaluated. The result
+  is `degraded = false`, `signals` is empty, and `notes` contains
+  `insufficient traffic in baseline window (<n> hits < 100)`. This avoids false positives on
+  low-traffic services.
+
+Otherwise, the service is `degraded` if **any** of these hold. Each rule that holds adds a human-readable entry
 to `signals`. The thresholds are domain constants.
 
 - BR-12 (error rate): `currentErrorRate >= 2 * baselineErrorRate` **and**
@@ -268,7 +273,8 @@ Output:
 ## Testing
 
 - Domain (main focus, no mocks): `TimeWindow.previous()`, `deltaPct` with a zero baseline,
-  `errorRate` with zero hits, each degraded rule exactly at its threshold, ranking, tie-breaks,
+  `errorRate` with zero hits, each degraded rule exactly at its threshold, the minimum-traffic
+  guard at 99 and 100 baseline hits, ranking, tie-breaks,
   null-latency ordering, the minimum-hits filter.
 - `ApmMetricsClientImpl`: mocked `MetricsApi` and `SpansApi` through a test constructor, like
   `DatadogClientImpl`. Covers mapping of scalar responses, grouped columns, and missing columns.
@@ -301,7 +307,9 @@ Output:
    `trace.<op>.duration.by.service.95p` metrics, decide whether to add a fallback.
 2. **Next.js operation detection.** With `dd-trace-js`, both `web.request` and `next.request` may
    exist. Confirm which span carries `span.kind:server` so detection always picks the same one.
-3. **Minimum traffic for the degraded verdict.** With very low traffic (for example 10 hits), BR-12 to
-   BR-14 can be noisy. Consider a minimum baseline hits threshold.
-4. **Diagnostics workflow.** Should `apm.service_health` / `apm.top_resources` become step 0 of the
-   MCP diagnostics workflow in the global `~/.claude/CLAUDE.md`?
+
+## Resolved Decisions
+
+- **Diagnostics workflow (2026-09-23):** `apm_service_health` and `apm_top_resources` are step 0 of the
+  MCP diagnostics workflow in the global `~/.claude/CLAUDE.md`. The step is skipped when the tools are
+  not available in the session.
