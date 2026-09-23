@@ -35,8 +35,9 @@ side only). Browser-side Next.js telemetry is RUM, not APM, and is out of scope.
 
 - BR-2: If the caller passes `operation`, it is used as is (`source = PROVIDED`).
 - BR-3: Otherwise the operation is detected: fetch the most recent span matching
-  `service:<service> env:<env> @span.kind:server` (limit 1) and use its `operation_name`
-  (`source = DETECTED`). `service_health` detects over the current and baseline windows combined
+  `service:<service> env:<env> @span.kind:server @_top_level:1` (limit 1) and use its
+  `operation_name` (`source = DETECTED`). `@_top_level:1` keeps only service entry spans; without it,
+  inner server spans such as Spring's `spring.handler` can be picked instead of `servlet.request`. `service_health` detects over the current and baseline windows combined
   (`[from - (to - from), to)`), so an outage in the current window can still be reported.
   `top_resources` detects over the current window only.
 - BR-4: If no span is found, the tool fails with:

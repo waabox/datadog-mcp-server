@@ -209,10 +209,19 @@ class ApmMetricsClientImplTest {
         final Optional<String> operation = client.detectEntryOperation("payments", "prod", WINDOW);
 
         assertEquals(Optional.of("servlet.request"), operation);
-        assertEquals("service:payments env:prod @span.kind:server",
+        assertEquals("service:payments env:prod @span.kind:server @_top_level:1",
                 spansApi.lastRequest.getData().getAttributes().getFilter().getQuery());
         assertEquals(1, spansApi.lastRequest.getData().getAttributes().getPage().getLimit());
         assertEquals(SpansSort.TIMESTAMP_DESCENDING, spansApi.lastRequest.getData().getAttributes().getSort());
+    }
+
+    @Test
+    void whenDetectingOperation_givenOperationNameAsTopLevelProperty_shouldReturnIt() {
+        final SpansAttributes attributes = new SpansAttributes();
+        attributes.putAdditionalProperty("operation_name", "servlet.request");
+        spansApi.response = spans(attributes);
+
+        assertEquals(Optional.of("servlet.request"), client.detectEntryOperation("payments", "prod", WINDOW));
     }
 
     @Test

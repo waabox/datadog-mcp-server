@@ -96,7 +96,7 @@ public final class ApmMetricsClientImpl implements ApmMetricsClient {
         Objects.requireNonNull(window, "window must not be null");
 
         final SpansQueryFilter filter = new SpansQueryFilter()
-                .query("service:" + service + " env:" + env + " @span.kind:server")
+                .query("service:" + service + " env:" + env + " @span.kind:server @_top_level:1")
                 .from(ISO_FORMATTER.format(window.from()))
                 .to(ISO_FORMATTER.format(window.to()));
 
@@ -119,6 +119,11 @@ public final class ApmMetricsClientImpl implements ApmMetricsClient {
         final SpansAttributes attributes = response.getData().get(0).getAttributes();
         if (attributes == null) {
             return Optional.empty();
+        }
+        // operation_name is a top-level span attribute; SDK 2.50.0 has no getter, so it lands in additional properties
+        final Optional<String> topLevel = readString(attributes.getAdditionalProperties(), OPERATION_NAME);
+        if (topLevel.isPresent()) {
+            return topLevel;
         }
         final Optional<String> fromAttributes = readString(attributes.getAttributes(), OPERATION_NAME);
         if (fromAttributes.isPresent()) {

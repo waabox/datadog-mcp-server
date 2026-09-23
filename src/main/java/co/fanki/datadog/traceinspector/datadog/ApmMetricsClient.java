@@ -20,7 +20,8 @@ public interface ApmMetricsClient {
     /**
      * Detects the operation name of a service's entry spans.
      *
-     * <p>Looks up the most recent span with {@code span.kind:server} in the window.</p>
+     * <p>Looks up the most recent service entry span ({@code span.kind:server} and top level) in the
+     * window. The top-level filter skips inner server spans such as {@code spring.handler}.</p>
      *
      * @param service the service name
      * @param env the environment
