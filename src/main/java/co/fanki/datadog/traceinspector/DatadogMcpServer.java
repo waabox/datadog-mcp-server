@@ -1,12 +1,17 @@
 package co.fanki.datadog.traceinspector;
 
+import co.fanki.datadog.traceinspector.application.ApmHealthService;
 import co.fanki.datadog.traceinspector.application.MarkdownWorkflowGenerator;
 import co.fanki.datadog.traceinspector.application.TraceDiagnosticService;
 import co.fanki.datadog.traceinspector.application.TraceScenarioExtractor;
 import co.fanki.datadog.traceinspector.config.DatadogConfig;
 import co.fanki.datadog.traceinspector.config.FilterConfigStore;
+import co.fanki.datadog.traceinspector.datadog.ApmMetricsClient;
+import co.fanki.datadog.traceinspector.datadog.ApmMetricsClientImpl;
 import co.fanki.datadog.traceinspector.datadog.DatadogClient;
 import co.fanki.datadog.traceinspector.datadog.DatadogClientImpl;
+import co.fanki.datadog.traceinspector.mcp.ApmServiceHealthTool;
+import co.fanki.datadog.traceinspector.mcp.ApmTopResourcesTool;
 import co.fanki.datadog.traceinspector.mcp.FilterConfigureTool;
 import co.fanki.datadog.traceinspector.mcp.LogCorrelateTool;
 import co.fanki.datadog.traceinspector.mcp.LogSearchTool;
@@ -113,6 +118,8 @@ public final class DatadogMcpServer {
             final TraceScenarioExtractor scenarioExtractor =
                     new TraceScenarioExtractor();
             final FilterConfigStore filterConfigStore = new FilterConfigStore();
+            final ApmMetricsClient apmMetricsClient = new ApmMetricsClientImpl(config);
+            final ApmHealthService apmHealthService = new ApmHealthService(apmMetricsClient);
 
             // Create tools
             final List<McpTool> tools = List.of(
@@ -121,7 +128,9 @@ public final class DatadogMcpServer {
                     new LogSearchTool(datadogClient, config, filterConfigStore),
                     new LogCorrelateTool(datadogClient, config, filterConfigStore),
                     new TraceExtractScenarioTool(datadogClient, scenarioExtractor, config),
-                    new FilterConfigureTool(filterConfigStore)
+                    new FilterConfigureTool(filterConfigStore),
+                    new ApmServiceHealthTool(apmHealthService, config),
+                    new ApmTopResourcesTool(apmHealthService, config)
             );
 
             // Create protocol handler

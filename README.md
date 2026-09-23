@@ -54,6 +54,8 @@ The installer will:
 | `trace.extract_scenario` | Extract structured test scenario from a trace for debugging and unit test generation |
 | `log.search_logs` | Search logs with filters and optional pattern summarization |
 | `log.correlate` | Correlate logs with a specific trace ID |
+| `apm.service_health` | APM health of a service (hits, errors, error rate, p50/p95/p99) compared with the previous window, with a degraded verdict |
+| `apm.top_resources` | Rank a service's endpoints by errors, error rate, p95 latency or hits |
 
 ---
 
@@ -456,6 +458,107 @@ Find all logs associated with a specific trace ID and optionally include trace d
   "logCount": 2
 }
 ```
+
+---
+
+### 6. APM Service Health (`apm.service_health`)
+
+Get the health of a service over a time window, compared with the previous window of the same length, with a degraded/not-degraded verdict.
+
+**Natural Language Prompts:**
+
+```
+"What's the health of payment-service over the last hour?"
+
+"Is order-service degraded right now?"
+
+"Compare checkout-service error rate and latency to the previous hour"
+```
+
+**Parameters:**
+
+| param       | type     | required | default               | notes                                  |
+|-------------|----------|----------|-----------------------|-----------------------------------------|
+| `service`   | string   | yes      |                       |                                         |
+| `env`       | string   | no       | `DATADOG_ENV_DEFAULT` |                                         |
+| `from`      | ISO-8601 | yes      |                       |                                         |
+| `to`        | ISO-8601 | yes      |                       |                                         |
+| `operation` | string   | no       | detected (BR-3)       | e.g. `servlet.request`, `next.request` |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "service": "payments",
+  "env": "prod",
+  "operation": "servlet.request",
+  "operationSource": "detected",
+  "window":   {"from": "2026-09-23T13:00:00Z", "to": "2026-09-23T14:00:00Z"},
+  "baseline": {"from": "2026-09-23T12:00:00Z", "to": "2026-09-23T13:00:00Z"},
+  "metrics": {
+    "hits":       {"current": 12000, "baseline": 11800, "deltaPct": 1.7},
+    "errors":     {"current": 340,   "baseline": 20,    "deltaPct": 1600.0},
+    "errorRate":  {"current": 2.83,  "baseline": 0.17,  "deltaPct": 1564.7},
+    "latencyP50": {"current": 45.0,  "baseline": 42.0,  "deltaPct": 7.1},
+    "latencyP95": {"current": 310.0, "baseline": 290.0, "deltaPct": 6.9},
+    "latencyP99": {"current": 900.0, "baseline": 850.0, "deltaPct": 5.9}
+  },
+  "degraded": true,
+  "signals": ["error rate 0.17% -> 2.83%"],
+  "notes": []
+}
+```
+
+---
+
+### 7. APM Top Resources (`apm.top_resources`)
+
+Rank a service's resources (endpoints) by errors, error rate, latency, or traffic.
+
+**Natural Language Prompts:**
+
+```
+"What are the top failing endpoints in payment-service over the last hour?"
+
+"Rank order-service resources by p95 latency"
+
+"Which checkout-service endpoints get the most traffic?"
+```
+
+**Parameters:**
+
+| param       | type     | required | default               | notes                                            |
+|-------------|----------|----------|-----------------------|--------------------------------------------------|
+| `service`   | string   | yes      |                       |                                                  |
+| `env`       | string   | no       | `DATADOG_ENV_DEFAULT` |                                                  |
+| `from`      | ISO-8601 | yes      |                       |                                                  |
+| `to`        | ISO-8601 | yes      |                       |                                                  |
+| `operation` | string   | no       | detected (BR-3)       |                                                  |
+| `sortBy`    | enum     | no       | `errors`              | `errors` \| `errorRate` \| `latencyP95` \| `hits` |
+| `limit`     | number   | no       | 10                    | max 50                                           |
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "service": "payments",
+  "env": "prod",
+  "operation": "servlet.request",
+  "operationSource": "detected",
+  "window": {"from": "...", "to": "..."},
+  "sortBy": "errors",
+  "count": 1,
+  "resources": [
+    {"resource": "POST /api/checkout", "hits": 4200, "errors": 310, "errorRate": 7.38,
+     "latencyP50": 120.0, "latencyP95": 850.0, "latencyP99": 2100.0}
+  ],
+  "notes": []
+}
+```
+
+The API key and application key need the `timeseries_query` permission in addition to the current APM and logs read permissions.
 
 ---
 

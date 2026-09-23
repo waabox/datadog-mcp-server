@@ -49,17 +49,22 @@ co.fanki.datadog.traceinspector
 ├── datadog/
 │   ├── DatadogClient         # Interface for Datadog API operations
 │   ├── DatadogClientImpl     # Implementation using Datadog SDK
+│   ├── ApmMetricsClient      # Interface for APM trace metrics (Metrics API v2)
+│   ├── ApmMetricsClientImpl  # Scalar queries + entry operation detection
 │   ├── RetryExecutor         # Retry with exponential backoff
 │   └── RetryConfig           # Retry configuration (attempts, delays, retryable codes)
 ├── domain/                   # Rich domain models (records, immutable)
 │   ├── TraceQuery, TraceSummary, TraceDetail, SpanDetail
 │   ├── LogQuery, LogSummary, LogGroupSummary
 │   ├── DiagnosticResult, ServiceErrorView
-│   └── TraceScenario, EntryPoint, ExecutionStep, ErrorContext, StackTraceLocation
+│   ├── TraceScenario, EntryPoint, ExecutionStep, ErrorContext, StackTraceLocation
+│   ├── TimeWindow, ApmOperation, ApmMetrics, MetricComparison
+│   └── ServiceHealth, ResourceStats, ResourceSortCriteria, TopResources
 ├── application/              # Orchestration services
 │   ├── TraceDiagnosticService      # Coordinates trace inspection workflow
 │   ├── MarkdownWorkflowGenerator   # Generates actionable debugging docs
-│   └── TraceScenarioExtractor      # Extracts test scenarios from traces
+│   ├── TraceScenarioExtractor      # Extracts test scenarios from traces
+│   └── ApmHealthService            # Resolves operation, fetches APM metrics
 └── mcp/                      # MCP protocol layer
     ├── McpTool                     # Interface for all tools
     ├── McpProtocolHandler          # JSON-RPC 2.0 request router
@@ -67,7 +72,9 @@ co.fanki.datadog.traceinspector
     ├── TraceInspectErrorTraceTool  # trace.inspect_error_trace
     ├── TraceExtractScenarioTool    # trace.extract_scenario
     ├── LogSearchTool               # log.search_logs (with summarize mode)
-    └── LogCorrelateTool            # log.correlate
+    ├── LogCorrelateTool            # log.correlate
+    ├── ApmServiceHealthTool        # apm.service_health
+    └── ApmTopResourcesTool         # apm.top_resources
 ```
 
 ### Key Design Patterns
