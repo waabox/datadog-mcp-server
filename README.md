@@ -609,6 +609,7 @@ The API key and application key need the `timeseries_query` permission in additi
 | `POST /api/v2/spans/events/search` | `apm_read` |
 | `GET /api/v1/trace/{traceId}` | `apm_read` |
 | `POST /api/v2/logs/events/search` | `logs_read_data` |
+| `POST /api/v2/query/scalar` | `timeseries_query` |
 
 ---
 
@@ -635,6 +636,7 @@ You need two keys from Datadog: an **API Key** and an **Application Key**.
 4. **Important:** Configure the required scopes:
    - `apm_read` - Read APM traces and spans
    - `logs_read_data` - Read log data
+   - `timeseries_query` - Query APM trace metrics (`apm.service_health`, `apm.top_resources`)
 5. Copy the key value (40-character string like `abcd1234abcd1234abcd1234abcd1234abcd1234`)
 
 > **Note:** Copy the actual key value from the KEY column, not the Key ID.

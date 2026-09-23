@@ -88,6 +88,6 @@ jobs:
 
             ### Requirements
             - Java 21+
-            - Datadog API Key and Application Key with `apm_read` and `logs_read_data` scopes
+            - Datadog API Key and Application Key with `apm_read`, `logs_read_data` and `timeseries_query` scopes
 
             See [README](https://github.com/waabox/datadog-mcp-server#readme) for full documentation.

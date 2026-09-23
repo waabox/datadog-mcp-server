@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_URL="https://github.com/waabox/datadog-mcp-server"
-STABLE_TAG="v1.5.0"
-JAR_NAME="datadog-mcp-server-1.5.0.jar"
+STABLE_TAG="v1.6.0"
+JAR_NAME="datadog-mcp-server-1.6.0.jar"
 JAR_DOWNLOAD_URL="$REPO_URL/releases/download/$STABLE_TAG/$JAR_NAME"
 
 # Pirate banner
@@ -194,6 +194,7 @@ get_credentials() {
     echo -e "   Required scopes for Application Key:"
     echo -e "   • ${CYAN}apm_read${NC} - Read APM data"
     echo -e "   • ${CYAN}logs_read_data${NC} - Read logs data"
+    echo -e "   • ${CYAN}timeseries_query${NC} - Query APM trace metrics (apm.service_health, apm.top_resources)"
     echo ""
 
     DATADOG_API_KEY=""
@@ -376,6 +377,10 @@ show_completion() {
     if [ "$ALREADY_CONFIGURED" = true ]; then
         echo -e "${GREEN}✓ Your existing configuration was preserved.${NC}"
         echo ""
+        echo -e "${YELLOW}⚠️  New in this version: APM health tools need the ${CYAN}timeseries_query${YELLOW} scope${NC}"
+        echo -e "   on yer Application Key. Without it they fail with 403 Forbidden."
+        echo -e "   Add it in: ${BLUE}Organization Settings → Application Keys${NC}"
+        echo ""
     elif [[ "$DATADOG_API_KEY" == "YOUR_API_KEY_HERE" ]]; then
         echo -e "${YELLOW}⚠️  IMPORTANT: Don't forget to add yer Datadog keys!${NC}"
         echo -e "   Edit: ${CYAN}$MCP_CONFIG_FILE${NC}"
@@ -389,6 +394,8 @@ show_completion() {
     echo -e "   ${CYAN}\"Analyze trace abc123 and help me debug it\"${NC}"
     echo ""
     echo -e "   ${CYAN}\"Search logs for my-service with level ERROR\"${NC}"
+    echo ""
+    echo -e "   ${CYAN}\"Is my-service degraded in the last hour? Which endpoints hurt the most?\"${NC}"
     echo ""
     echo -e "${YELLOW}Fair winds and following seas, matey! ⚓️${NC}"
     echo ""
