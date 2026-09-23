@@ -1,6 +1,6 @@
 # Use Case: APM Service Health and Top Resources
 
-Status: Design approved (2026-09-23). Not implemented yet.
+Status: Implemented and verified against production data (2026-09-23, release v1.6.0).
 
 ## Context
 
@@ -247,7 +247,7 @@ Output:
   "sortBy": "errors",
   "count": 1,
   "resources": [
-    {"resource": "POST /api/checkout", "hits": 4200, "errors": 310, "errorRate": 7.38,
+    {"resource": "post_/api/checkout", "hits": 4200, "errors": 310, "errorRate": 7.38,
      "latencyP50": 120.0, "latencyP95": 850.0, "latencyP99": 2100.0}
   ],
   "notes": []
@@ -304,14 +304,26 @@ Output:
 
 ## Open Questions
 
-1. **Percentile query shape.** Confirm during implementation the exact scalar query and aggregator for
-   percentiles on the `trace.<op>` distribution (for example `p95:trace.servlet.request{...}` with the
-   `percentile` aggregator). If an account only has the legacy
-   `trace.<op>.duration.by.service.95p` metrics, decide whether to add a fallback.
-2. **Next.js operation detection.** With `dd-trace-js`, both `web.request` and `next.request` may
-   exist. Confirm which span carries `span.kind:server` so detection always picks the same one.
+1. **Next.js operation detection.** Not verified yet against a Next.js service. `@_top_level:1` should
+   pick the service entry span (`web.request` or `next.request`), but confirm with a real portal.
+2. **Legacy percentile metrics.** Accounts that only have `trace.<op>.duration.by.service.95p` (no
+   distribution metric) get `null` latency. Decide whether to add a fallback if that ever happens.
 
 ## Resolved Decisions
+
+- **Live verification (2026-09-23, `publication-service`, prod, 12:00-13:00 UTC):**
+  - Detection picks `servlet.request`. `operation_name` is a top-level span attribute (SDK 2.50.0 exposes
+    it only through `getAdditionalProperties()`), and `@_top_level:1` is required because Spring also
+    marks `spring.handler` spans as `span.kind:server`.
+  - `p95:trace.<op>{...}` with the `percentile` aggregator matches the APM UI per endpoint (for example
+    `/publications` 21.7 ms, `/categories` 4.83 ms). Response columns are named after the query names.
+  - Hits are exact for `[from, to)` (43,839; the same across scalar and v1 timeseries). The APM UI shows
+    45.2k because it rounds the window edges to rollup buckets.
+  - `resource_name` values are normalized by trace metrics (`get_/presales/_eventcode_/validate`).
+    The tool description and README tell the assistant to translate them back before span or log
+    searches.
+  - `POST /api/v2/query/scalar` returns intermittent 503s with an empty body (~40% in a burst of 10
+    calls). The metrics client retries up to 5 times, and the final error shows the HTTP status.
 
 - **Diagnostics workflow (2026-09-23):** `apm_service_health` and `apm_top_resources` are step 0 of the
   MCP diagnostics workflow in the global `~/.claude/CLAUDE.md`. The step is skipped when the tools are

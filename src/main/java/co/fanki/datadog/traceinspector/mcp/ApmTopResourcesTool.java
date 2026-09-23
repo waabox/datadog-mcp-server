@@ -25,7 +25,9 @@ public final class ApmTopResourcesTool implements McpTool {
     private static final String TOOL_NAME = "apm.top_resources";
     private static final String TOOL_DESCRIPTION =
             "Rank a service's resources (endpoints) by errors, error rate, p95 latency or hits "
-                    + "using APM trace metrics for a time window";
+                    + "using APM trace metrics for a time window. Resource names come normalized from trace "
+                    + "metrics (lowercase, spaces and braces replaced by '_', e.g. 'get_/users/_id_'), so "
+                    + "translate them back (e.g. 'GET /users/{id}') before using them in span or log searches";
 
     private final ApmHealthService healthService;
     private final DatadogConfig config;

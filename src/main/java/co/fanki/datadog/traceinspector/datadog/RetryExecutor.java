@@ -160,11 +160,14 @@ public final class RetryExecutor {
         final int code;
 
         if (lastException != null) {
+            final String body = lastException.getResponseBody();
+            // Datadog can answer 5xx with an empty body; fall back to the status code
+            final String detail = body == null || body.isBlank() ? "HTTP " + lastException.getCode() : body;
             message = String.format(
                     "Failed to %s after %d attempt(s): %s",
                     operationName,
                     attempts + 1,
-                    lastException.getResponseBody()
+                    detail
             );
             code = lastException.getCode();
         } else {

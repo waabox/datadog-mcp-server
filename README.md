@@ -37,11 +37,10 @@ curl -fsSL https://raw.githubusercontent.com/waabox/datadog-mcp-server/main/inst
 
 The installer will:
 
-1. Download the latest stable version from git
-2. Build the project (skips tests for speed)
-3. Copy the JAR to `~/.claude/apps/mcp/`
-4. Configure Claude Code's `mcp.json`
-5. Ask for your Datadog API keys (optional)
+1. Download the stable release JAR from GitHub Releases
+2. Copy it to `~/.claude/apps/mcp/` (removing older versions)
+3. Register `waabox-datadog-mcp` as a user-scoped MCP server in `~/.claude.json`
+4. Ask for your Datadog API keys (optional; on upgrade, existing keys are kept)
 
 ---
 
@@ -551,7 +550,7 @@ Rank a service's resources (endpoints) by errors, error rate, latency, or traffi
   "sortBy": "errors",
   "count": 1,
   "resources": [
-    {"resource": "POST /api/checkout", "hits": 4200, "errors": 310, "errorRate": 7.38,
+    {"resource": "post_/api/checkout", "hits": 4200, "errors": 310, "errorRate": 7.38,
      "latencyP50": 120.0, "latencyP95": 850.0, "latencyP99": 2100.0}
   ],
   "notes": []
@@ -559,6 +558,8 @@ Rank a service's resources (endpoints) by errors, error rate, latency, or traffi
 ```
 
 The API key and application key need the `timeseries_query` permission in addition to the current APM and logs read permissions.
+
+Resource names in `apm.top_resources` come from trace metrics, where Datadog normalizes tag values: lowercase, with spaces and braces replaced by `_`. For example, `GET /presales/{eventCode}/validate` is returned as `get_/presales/_eventcode_/validate`. Translate it back before using it in span or log searches.
 
 ---
 

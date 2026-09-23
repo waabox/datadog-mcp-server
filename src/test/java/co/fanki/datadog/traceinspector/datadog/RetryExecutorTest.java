@@ -61,6 +61,18 @@ class RetryExecutorTest {
     }
 
     @Test
+    void whenExecuting_givenFailureWithEmptyBody_shouldReportHttpStatusInMessage() {
+        final RetryExecutor executor = new RetryExecutor(RetryConfig.noRetry());
+
+        final DatadogApiException exception = assertThrows(DatadogApiException.class,
+                () -> executor.execute(() -> {
+                    throw new ApiException(503, "");
+                }, "query service metrics"));
+
+        assertTrue(exception.getMessage().endsWith(": HTTP 503"), exception.getMessage());
+    }
+
+    @Test
     void whenExecuting_givenNonRetryableError_shouldNotRetry() {
         final RetryConfig config = new RetryConfig(3, 10, 100, 2.0, Set.of(500, 503));
         final RetryExecutor executor = new RetryExecutor(config);

@@ -59,6 +59,9 @@ public final class ApmMetricsClientImpl implements ApmMetricsClient {
     private static final double SECONDS_TO_MILLIS = 1000.0;
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
+    // The scalar query endpoint answers intermittent 503s with an empty body, so allow more attempts
+    private static final RetryConfig METRICS_RETRY = new RetryConfig(5, 500L, 5000L, 2.0, null);
+
     private final MetricsApi metricsApi;
     private final SpansApi spansApi;
     private final RetryExecutor retryExecutor;
@@ -73,7 +76,7 @@ public final class ApmMetricsClientImpl implements ApmMetricsClient {
         final ApiClient apiClient = config.buildApiClient();
         this.metricsApi = new MetricsApi(apiClient);
         this.spansApi = new SpansApi(apiClient);
-        this.retryExecutor = new RetryExecutor(RetryConfig.defaults());
+        this.retryExecutor = new RetryExecutor(METRICS_RETRY);
     }
 
     /**
