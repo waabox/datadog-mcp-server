@@ -153,6 +153,14 @@ class ServiceHealthTest {
     }
 
     @Test
+    void whenGettingNotes_givenNoBaselineLatency_shouldExplainMissingBaselineLatency() {
+        final ServiceHealth health = health(metrics(1000, 0, 100.0), new ApmMetrics(1000, 0, null, null, null));
+
+        assertTrue(health.notes().contains(
+                "latency distribution metric trace.servlet.request returned no data for the baseline window"));
+    }
+
+    @Test
     void whenComparingErrorRate_shouldUsePercentages() {
         final ServiceHealth health = health(metrics(1000, 20, 100.0), metrics(1000, 10, 100.0));
 

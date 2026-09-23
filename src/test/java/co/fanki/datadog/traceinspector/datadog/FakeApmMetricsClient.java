@@ -23,6 +23,7 @@ public final class FakeApmMetricsClient implements ApmMetricsClient {
     private String detectedOperation;
     private String lastOperation;
     private int detectCalls;
+    private TimeWindow lastDetectionWindow;
 
     /**
      * Sets the operation returned by detection; null means no entry span found.
@@ -79,9 +80,19 @@ public final class FakeApmMetricsClient implements ApmMetricsClient {
         return lastOperation;
     }
 
+    /**
+     * Returns the window passed to the last detection call.
+     *
+     * @return the window, or null if detection was never called
+     */
+    public TimeWindow lastDetectionWindow() {
+        return lastDetectionWindow;
+    }
+
     @Override
     public Optional<String> detectEntryOperation(final String service, final String env, final TimeWindow window) {
         detectCalls++;
+        lastDetectionWindow = window;
         return Optional.ofNullable(detectedOperation);
     }
 

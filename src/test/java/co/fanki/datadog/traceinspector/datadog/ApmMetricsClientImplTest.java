@@ -20,6 +20,7 @@ import com.datadog.api.client.v2.model.Span;
 import com.datadog.api.client.v2.model.SpansAttributes;
 import com.datadog.api.client.v2.model.SpansListRequest;
 import com.datadog.api.client.v2.model.SpansListResponse;
+import com.datadog.api.client.v2.model.SpansSort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -130,6 +132,39 @@ class ApmMetricsClientImplTest {
     }
 
     @Test
+    void whenQueryingServiceMetrics_givenThreeUnnamedColumns_shouldIgnoreThem() {
+        metricsApi.response = response(
+                data("query1", 100.0), data("query2", 5.0), data("query3", 0.01));
+
+        final ApmMetrics metrics = client.queryServiceMetrics("payments", "prod", "servlet.request", WINDOW);
+
+        assertEquals(ApmMetrics.empty(), metrics);
+    }
+
+    @Test
+    void whenQueryingServiceMetrics_givenNamedAndUnknownColumns_shouldMapOnlyNamedOnes() {
+        metricsApi.response = response(data("hits", 10.0), data("query9", 0.5));
+
+        final ApmMetrics metrics = client.queryServiceMetrics("payments", "prod", "servlet.request", WINDOW);
+
+        assertEquals(10L, metrics.hits());
+        assertEquals(0L, metrics.errors());
+        assertNull(metrics.latencyP50());
+        assertNull(metrics.latencyP95());
+        assertNull(metrics.latencyP99());
+    }
+
+    @Test
+    void whenQueryingServiceMetrics_givenErrorsAndNoData_shouldThrowDatadogApiException() {
+        metricsApi.response = new ScalarFormulaQueryResponse().errors("bad query");
+
+        final DatadogApiException e = assertThrows(DatadogApiException.class,
+                () -> client.queryServiceMetrics("payments", "prod", "servlet.request", WINDOW));
+
+        assertTrue(e.getMessage().contains("bad query"));
+    }
+
+    @Test
     void whenQueryingResourceMetrics_shouldGroupByResourceName() {
         metricsApi.response = response();
 
@@ -177,6 +212,7 @@ class ApmMetricsClientImplTest {
         assertEquals("service:payments env:prod @span.kind:server",
                 spansApi.lastRequest.getData().getAttributes().getFilter().getQuery());
         assertEquals(1, spansApi.lastRequest.getData().getAttributes().getPage().getLimit());
+        assertEquals(SpansSort.TIMESTAMP_DESCENDING, spansApi.lastRequest.getData().getAttributes().getSort());
     }
 
     @Test

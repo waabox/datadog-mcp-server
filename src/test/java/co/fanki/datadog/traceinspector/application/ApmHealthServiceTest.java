@@ -71,6 +71,25 @@ class ApmHealthServiceTest {
     }
 
     @Test
+    void whenGettingHealth_givenNoOperation_shouldDetectOverCurrentAndBaselineWindows() {
+        client.detectedOperation("servlet.request");
+
+        service.serviceHealth("payments", "prod", WINDOW, null);
+
+        assertEquals(new TimeWindow(WINDOW.previous().from(), WINDOW.to()), client.lastDetectionWindow());
+    }
+
+    @Test
+    void whenGettingTopResources_givenNoOperation_shouldDetectOverCurrentWindowOnly() {
+        client.detectedOperation("servlet.request");
+
+        service.topResources("payments", "prod", WINDOW, null, ResourceSortCriteria.ERRORS,
+                ResourceSortCriteria.DEFAULT_LIMIT);
+
+        assertEquals(WINDOW, client.lastDetectionWindow());
+    }
+
+    @Test
     void whenGettingHealth_givenNothingDetected_shouldThrowWithHint() {
         final IllegalStateException e = assertThrows(IllegalStateException.class,
                 () -> service.serviceHealth("payments", "prod", WINDOW, null));

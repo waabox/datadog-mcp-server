@@ -23,7 +23,7 @@ class TopResourcesTest {
     @Test
     void whenGettingNotes_givenNoResources_shouldExplainMissingMetrics() {
         final TopResources top = new TopResources("payments", "prod", ApmOperation.detected("servlet.request"),
-                WINDOW, ResourceSortCriteria.ERRORS, List.of());
+                WINDOW, ResourceSortCriteria.ERRORS, List.of(), 0);
 
         assertEquals(List.of("no trace metrics found for operation servlet.request"), top.notes());
     }
@@ -32,8 +32,17 @@ class TopResourcesTest {
     void whenGettingNotes_givenResources_shouldBeEmpty() {
         final ResourceStats stats = new ResourceStats("GET /a", new ApmMetrics(1, 0, null, null, null));
         final TopResources top = new TopResources("payments", "prod", ApmOperation.detected("servlet.request"),
-                WINDOW, ResourceSortCriteria.ERRORS, List.of(stats));
+                WINDOW, ResourceSortCriteria.ERRORS, List.of(stats), 1);
 
         assertTrue(top.notes().isEmpty());
+    }
+
+    @Test
+    void whenGettingNotes_givenAllExcludedByErrorRateRanking_shouldExplainExclusion() {
+        final TopResources top = new TopResources("payments", "prod", ApmOperation.detected("servlet.request"),
+                WINDOW, ResourceSortCriteria.ERROR_RATE, List.of(), 3);
+
+        assertEquals(List.of("3 resources excluded by errorRate ranking (fewer than "
+                + ResourceSortCriteria.MIN_HITS_FOR_ERROR_RATE + " hits each)"), top.notes());
     }
 }

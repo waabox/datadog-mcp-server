@@ -56,7 +56,8 @@ public final class ApmHealthService {
         requireNotBlank(env, "env");
         Objects.requireNonNull(window, "window must not be null");
 
-        final ApmOperation operation = resolveOperation(service, env, window, operationOverride);
+        final TimeWindow detectionWindow = new TimeWindow(window.previous().from(), window.to());
+        final ApmOperation operation = resolveOperation(service, env, detectionWindow, operationOverride);
         final ApmMetrics current = metricsClient.queryServiceMetrics(service, env, operation.name(), window);
         final TimeWindow baselineWindow = window.previous();
         final ApmMetrics baseline = metricsClient.queryServiceMetrics(service, env, operation.name(), baselineWindow);
@@ -96,7 +97,7 @@ public final class ApmHealthService {
         final ApmOperation operation = resolveOperation(service, env, window, operationOverride);
         final List<ResourceStats> stats = metricsClient.queryResourceMetrics(service, env, operation.name(), window);
 
-        return new TopResources(service, env, operation, window, sortBy, sortBy.rank(stats, limit));
+        return new TopResources(service, env, operation, window, sortBy, sortBy.rank(stats, limit), stats.size());
     }
 
     private ApmOperation resolveOperation(

@@ -195,6 +195,10 @@ public record ServiceHealth(
         if (!current.hasLatency()) {
             notes.add("latency distribution metric trace." + operation.name() + " returned no data");
         }
+        if (current.hasLatency() && !baseline.hasLatency()) {
+            notes.add("latency distribution metric trace." + operation.name()
+                    + " returned no data for the baseline window");
+        }
         return List.copyOf(notes);
     }
 }

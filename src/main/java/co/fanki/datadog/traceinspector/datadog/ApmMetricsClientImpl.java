@@ -229,26 +229,28 @@ public final class ApmMetricsClientImpl implements ApmMetricsClient {
     }
 
     private static Map<String, List<Double>> dataColumns(final ScalarFormulaQueryResponse response) {
-        final Map<String, List<Double>> byName = new HashMap<>();
-        int position = 0;
+        final List<DataScalarColumn> dataColumns = new ArrayList<>();
         for (final ScalarColumn column : columns(response)) {
             if (column.getActualInstance() instanceof DataScalarColumn data) {
-                final List<Double> values = data.getValues() != null ? data.getValues() : List.of();
-                byName.put(resolveColumnName(data.getName(), position), values);
-                position++;
+                dataColumns.add(data);
+            }
+        }
+
+        final boolean anyNamed = dataColumns.stream()
+                .anyMatch(data -> data.getName() != null && QUERY_NAMES.contains(data.getName()));
+        final boolean usePositional = !anyNamed && dataColumns.size() == QUERY_NAMES.size();
+
+        final Map<String, List<Double>> byName = new HashMap<>();
+        for (int position = 0; position < dataColumns.size(); position++) {
+            final DataScalarColumn data = dataColumns.get(position);
+            final List<Double> values = data.getValues() != null ? data.getValues() : List.of();
+            if (data.getName() != null && QUERY_NAMES.contains(data.getName())) {
+                byName.put(data.getName(), values);
+            } else if (usePositional) {
+                byName.put(QUERY_NAMES.get(position), values);
             }
         }
         return byName;
-    }
-
-    private static String resolveColumnName(final String name, final int position) {
-        if (name != null && QUERY_NAMES.contains(name)) {
-            return name;
-        }
-        if (position < QUERY_NAMES.size()) {
-            return QUERY_NAMES.get(position);
-        }
-        return name != null ? name : "column" + position;
     }
 
     private static List<String> groupValues(final ScalarFormulaQueryResponse response) {
