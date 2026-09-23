@@ -102,3 +102,16 @@ void whenDoingSomething_givenSomeScenario_shouldDoOrHappenSomething()
 - Uses Datadog API Client SDK v2.50.0
 - Shaded JAR via maven-shade-plugin (single deployable artifact)
 - No Spring, no Lombok - pure Java with Jackson for JSON
+
+## Use Cases
+
+| Use case | Status | Document |
+|----------|--------|----------|
+| APM service health and top resources (`apm.service_health`, `apm.top_resources`) | Design approved | [.claude/docs/use-cases/apm-service-health.md](.claude/docs/use-cases/apm-service-health.md) |
+
+### APM Architectural Rules
+
+- APM numbers (hits, errors, error rate, latency) come from **trace metrics** via the Metrics API v2, never from indexed spans. Indexed spans are sampled and only used to find individual traces or to detect an operation name.
+- Metrics access lives in its own client (`ApmMetricsClient`). Do not add metrics methods to `DatadogClient`.
+- Operation names differ by stack (`servlet.request` for Java/Spring, `next.request`/`web.request` for Next.js). Tools detect them from a recent `span.kind:server` span and accept an `operation` override.
+- Comparison, threshold, and ranking rules (degraded verdict, delta %, sort criteria) belong in the domain, not in tools or application services.
